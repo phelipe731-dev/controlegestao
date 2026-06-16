@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+frontend/node_modules
+frontend/dist
+backend/node_modules
+backend/dist
+backend/prisma/dev.db
+*.log
+*.err
+Thumbs.db
+Desktop.ini

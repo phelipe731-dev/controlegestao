@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Work+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color: #102127;
+    background:
+      radial-gradient(circle at top right, rgba(200, 132, 58, 0.18), transparent 30%),
+      radial-gradient(circle at 15% 20%, rgba(15, 118, 110, 0.14), transparent 38%),
+      #eff4f2;
+  }
+
+  body {
+    @apply min-h-screen bg-mist bg-campaign-grid font-body text-ink antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .app-card {
+    @apply rounded-3xl border border-white/50 bg-white/85 shadow-glow backdrop-blur;
+  }
+
+  .field-base {
+    @apply w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink transition focus:border-teal focus:ring-2 focus:ring-teal/15;
+  }
+
+  .label-base {
+    @apply mb-2 block text-sm font-semibold text-slate-600;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .button-danger {
+    @apply inline-flex items-center justify-center rounded-2xl bg-rose px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose/90 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}

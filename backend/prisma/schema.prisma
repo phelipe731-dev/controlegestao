@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  ADMIN
+  SUPERVISOR
+  LEADER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SupporterStatus {
+  ACTIVE
+  ARCHIVED
+  ANONYMIZED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  TRANSFER
+  LOGIN
+  REQUEST_PASSWORD_RESET
+  RESET_PASSWORD
+  ANONYMIZE
+}
+
+enum ConsentOrigin {
+  WEB_FORM
+  PRESENTIAL
+  EVENT
+  WHATSAPP
+  PHONE
+  OTHER
+}
+
+enum CommunicationChannelType {
+  WHATSAPP
+  SMS
+  EMAIL
+}
+
+enum CommunicationMode {
+  API
+  QR
+  MANUAL
+}
+
+enum CommunicationChannelStatus {
+  DRAFT
+  CONNECTING
+  CONNECTED
+  READY
+  ERROR
+}
+
+enum CampaignStatus {
+  DRAFT
+  QUEUED
+  SCHEDULED
+  SENT
+  FAILED
+}
+
+enum CampaignAudienceType {
+  ALL_SUPPORTERS
+  CITY
+  ELECTORAL_ZONE
+  LEADER
+}
+
+enum CampaignRecipientStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum EventStatus {
+  DRAFT
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum EventFormat {
+  PRESENTIAL
+  ONLINE
+  HYBRID
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        RoleName @unique
+  description String
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  roleId              String
+  role                Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  name                String
+  email               String               @unique
+  cpf                 String               @unique
+  phone               String?
+  phoneNormalized     String?              @unique
+  passwordHash        String
+  status              UserStatus           @default(ACTIVE)
+  fullAddress         String?
+  city                String?
+  neighborhood        String?
+  leaderProfile       Leader?
+  supervisorProfile   Supervisor?
+  createdSupporters   Supporter[]          @relation("SupporterCreator")
+  updatedSupporters   Supporter[]          @relation("SupporterUpdater")
+  createdConsents     SupporterConsent[]   @relation("ConsentRecorder")
+  auditLogs           AuditLog[]           @relation("AuditActor")
+  loginLogs           LoginLog[]           @relation("LoginActor")
+  passwordResetTokens PasswordResetToken[]
+  campaigns           CommunicationCampaign[] @relation("CampaignCreator")
+  events              CampaignEvent[]      @relation("EventCreator")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([roleId])
+  @@index([status])
+  @@index([city])
+}
+
+model Supervisor {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canCreateLeaders Boolean  @default(false)
+  leaders          Leader[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Leader {
+  id           String      @id @default(cuid())
+  userId       String      @unique
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supervisorId String?
+  supervisor   Supervisor? @relation(fields: [supervisorId], references: [id], onDelete: SetNull)
+  supporters   Supporter[]
+  campaigns    CommunicationCampaign[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([supervisorId])
+}
+
+model Supporter {
+  id                String            @id @default(cuid())
+  fullName          String
+  cpf               String            @unique
+  phone             String?
+  phoneNormalized   String?           @unique
+  birthDate         DateTime
+  fullAddress       String
+  postalCode        String
+  street            String
+  number            String
+  complement        String?
+  neighborhood      String
+  city              String
+  state             String
+  voterRegistration String            @unique
+  electoralZone     String
+  electoralSection  String
+  notes             String?
+  consentAccepted   Boolean
+  consentSource     ConsentOrigin
+  consentAcceptedAt DateTime
+  status            SupporterStatus   @default(ACTIVE)
+  leaderId          String
+  leader            Leader            @relation(fields: [leaderId], references: [id], onDelete: Restrict)
+  createdByUserId   String
+  createdByUser     User              @relation("SupporterCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedByUserId   String?
+  updatedByUser     User?             @relation("SupporterUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  consents          SupporterConsent[]
+  campaignRecipients CampaignRecipient[]
+  inboxMessages     CommunicationInboxMessage[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([leaderId])
+  @@index([city])
+  @@index([neighborhood])
+  @@index([electoralZone])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SupporterConsent {
+  id                 String        @id @default(cuid())
+  supporterId        String
+  supporter          Supporter     @relation(fields: [supporterId], references: [id], onDelete: Cascade)
+  accepted           Boolean
+  source             ConsentOrigin
+  recordedByUserId   String
+  recordedByUser     User          @relation("ConsentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  acceptedAt         DateTime
+  ipAddress          String?
+  consentTextVersion String?
+  createdAt          DateTime      @default(now())
+
+  @@index([supporterId])
+  @@index([acceptedAt])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorUserId String?
+  actorUser  User?       @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  action     AuditAction
+  entityType String
+  entityId   String
+  ipAddress  String?
+  userAgent  String?
+  previousData Json?
+  nextData   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+}
+
+model LoginLog {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation("LoginActor", fields: [userId], references: [id], onDelete: SetNull)
+  email      String
+  ipAddress  String?
+  userAgent  String?
+  success    Boolean
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model CommunicationChannelConfig {
+  id            String                     @id @default(cuid())
+  name          String
+  type          CommunicationChannelType
+  mode          CommunicationMode
+  status        CommunicationChannelStatus @default(DRAFT)
+  providerName  String?
+  apiBaseUrl    String?
+  apiToken      String?
+  senderId      String?
+  phoneNumber   String?
+  qrToken       String?
+  isDefault     Boolean                    @default(false)
+  lastSyncAt    DateTime?
+  campaigns     CommunicationCampaign[]
+  inboxMessages CommunicationInboxMessage[]
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@index([type])
+  @@index([status])
+}
+
+model CommunicationCampaign {
+  id               String                @id @default(cuid())
+  title            String
+  subject          String?
+  body             String
+  channelConfigId  String
+  channelConfig    CommunicationChannelConfig @relation(fields: [channelConfigId], references: [id], onDelete: Restrict)
+  status           CampaignStatus        @default(DRAFT)
+  audienceType     CampaignAudienceType
+  city             String?
+  electoralZone    String?
+  leaderId         String?
+  leader           Leader?               @relation(fields: [leaderId], references: [id], onDelete: SetNull)
+  notifyAllBase    Boolean               @default(false)
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  createdByUserId  String
+  createdByUser    User                  @relation("CampaignCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  recipients       CampaignRecipient[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([channelConfigId])
+  @@index([status])
+  @@index([audienceType])
+}
+
+model CampaignRecipient {
+  id             String                  @id @default(cuid())
+  campaignId     String
+  campaign       CommunicationCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  supporterId    String
+  supporter      Supporter               @relation(fields: [supporterId], references: [id], onDelete: Cascade)
+  status         CampaignRecipientStatus @default(QUEUED)
+  externalId     String?
+  sentAt         DateTime?
+  createdAt      DateTime                @default(now())
+
+  @@unique([campaignId, supporterId])
+  @@index([status])
+}
+
+model CommunicationInboxMessage {
+  id              String                   @id @default(cuid())
+  channelConfigId String?
+  channelConfig   CommunicationChannelConfig? @relation(fields: [channelConfigId], references: [id], onDelete: SetNull)
+  supporterId     String?
+  supporter       Supporter?               @relation(fields: [supporterId], references: [id], onDelete: SetNull)
+  senderName      String
+  senderAddress   String
+  channelType     CommunicationChannelType
+  subject         String?
+  body            String
+  receivedAt      DateTime
+  readAt          DateTime?
+  createdAt       DateTime                 @default(now())
+
+  @@index([receivedAt])
+  @@index([channelType])
+}
+
+model CampaignEvent {
+  id                String      @id @default(cuid())
+  title             String
+  description       String?
+  eventDate         DateTime
+  startTimeLabel    String
+  endTimeLabel      String
+  location          String
+  city              String
+  neighborhood      String?
+  electoralZone     String?
+  capacity          Int
+  expectedAudience  Int
+  notifyAllBase     Boolean     @default(false)
+  format            EventFormat
+  status            EventStatus @default(DRAFT)
+  createdByUserId   String
+  createdByUser     User        @relation("EventCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([eventDate])
+  @@index([city])
+  @@index([status])
+}

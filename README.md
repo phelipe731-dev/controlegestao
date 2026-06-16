@@ -116,6 +116,32 @@ docker compose exec backend npm run prisma:seed
 7. Configure o Nginx da VPS usando o exemplo em [deploy/nginx/campanhahub.conf.example](/C:/Users/W11/Documents/Projeto%20PH-KS/deploy/nginx/campanhahub.conf.example).
 8. Depois emita o HTTPS com `certbot`.
 
+### Deploy leve em VPS pequena
+
+Em instancias pequenas da Lightsail, evite compilar imagens na propria VPS. O workflow em `.github/workflows/docker-images.yml` publica imagens prontas no GitHub Container Registry a cada push na branch `main`.
+
+Depois que o workflow concluir no GitHub, rode na VPS:
+
+```bash
+cd campanhahub
+git pull
+docker compose -f docker-compose.vps.yml pull
+docker compose -f docker-compose.vps.yml up -d
+docker compose -f docker-compose.vps.yml ps
+```
+
+Para executar o seed inicial:
+
+```bash
+docker compose -f docker-compose.vps.yml exec backend npm run prisma:seed
+```
+
+Se as imagens estiverem privadas no GitHub Container Registry, faca login na VPS antes do `pull`:
+
+```bash
+echo SEU_TOKEN_GITHUB | docker login ghcr.io -u SEU_USUARIO_GITHUB --password-stdin
+```
+
 ## Como rodar sem Docker
 
 1. Inicie um PostgreSQL local e copie `backend/.env.example` para `backend/.env`.

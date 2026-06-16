@@ -1,5 +1,6 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/campanha_db?schema=public
 
 COPY package*.json ./
 RUN npm install

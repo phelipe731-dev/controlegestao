@@ -78,10 +78,10 @@ export function ReportsPage() {
   return (
     <div className="space-y-6">
       <div className="app-card p-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
-            <div className="text-sm text-slate-500">Relatorio filtrado</div>
-            <h2 className="font-display text-2xl font-bold">Base por lider, territorio e periodo</h2>
+            <div className="section-label">Relatorio filtrado</div>
+            <h2 className="mt-1 font-display text-base font-bold text-ink">Base por lider, territorio e periodo</h2>
           </div>
           <div className="flex gap-3">
             <button type="button" className="button-secondary" onClick={() => download('csv')}>
@@ -146,57 +146,61 @@ export function ReportsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="app-card p-6">
-          <div className="text-sm text-slate-500">Resumo por lider</div>
-          <h3 className="mt-2 font-display text-2xl font-bold">Ranking filtrado</h3>
-          <div className="mt-5 space-y-3">
+          <div className="border-b border-slate-100 pb-4">
+            <div className="section-label">Resumo por lider</div>
+            <h3 className="mt-1 font-display text-base font-bold text-ink">Ranking filtrado</h3>
+          </div>
+          <div className="mt-1 divide-y divide-slate-100">
             {(data?.summaryByLeader ?? []).map((item, index) => (
-              <div key={item.leaderId} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">#{index + 1}</div>
-                  <div className="font-semibold">{item.leaderName}</div>
+              <div key={item.leaderId} className="flex items-center gap-3 py-3">
+                <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${index === 0 ? 'bg-amber/20 text-amber' : 'bg-slate-100 text-slate-500'}`}>
+                  {index + 1}
                 </div>
-                <div className="text-2xl font-bold text-teal">{item.total}</div>
+                <div className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{item.leaderName}</div>
+                <div className="font-display text-lg font-bold text-teal">{item.total}</div>
               </div>
             ))}
-            {!data?.summaryByLeader.length ? <div className="text-slate-500">Sem dados para os filtros informados.</div> : null}
+            {!data?.summaryByLeader.length ? <div className="py-6 text-center text-sm text-slate-400">Sem dados para os filtros informados.</div> : null}
           </div>
         </div>
 
         <div className="app-card p-6">
-          <div className="mb-4 text-sm text-slate-500">Resultado</div>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-display text-2xl font-bold">Cadastros encontrados</h3>
-            <div className="rounded-2xl bg-sand px-4 py-2 text-sm font-semibold text-ink">{data?.total ?? 0} registros</div>
+          <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <div className="section-label">Resultado</div>
+              <h3 className="mt-1 font-display text-base font-bold text-ink">Cadastros encontrados</h3>
+            </div>
+            <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{data?.total ?? 0} registros</div>
           </div>
           {isLoading ? <div className="text-slate-600">Gerando relatorio...</div> : null}
           {(data?.supporters ?? []).length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="text-slate-500">
+              <table className="crm-table">
+                <thead>
                   <tr>
-                    <th className="pb-3">Nome</th>
-                    <th className="pb-3">Cidade</th>
-                    <th className="pb-3">Lider</th>
-                    <th className="pb-3">Zona</th>
-                    <th className="pb-3">Cadastro</th>
+                    <th>Nome</th>
+                    <th>Cidade</th>
+                    <th>Lider</th>
+                    <th>Zona</th>
+                    <th>Cadastro</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {data?.supporters.map((supporter) => (
                     <tr key={supporter.id}>
-                      <td className="py-4">
-                        <div className="font-semibold">{supporter.fullName}</div>
-                        <div className="text-slate-500">{cpfMask(supporter.cpf)}</div>
+                      <td>
+                        <div className="font-medium text-ink">{supporter.fullName}</div>
+                        <div className="mt-0.5 text-xs text-slate-400">{cpfMask(supporter.cpf)}</div>
                       </td>
-                      <td className="py-4">
-                        <div>{supporter.city}</div>
-                        <div className="text-slate-500">{supporter.neighborhood}</div>
+                      <td>
+                        <div className="text-sm text-ink">{supporter.city}</div>
+                        <div className="mt-0.5 text-xs text-slate-400">{supporter.neighborhood}</div>
                       </td>
-                      <td className="py-4">{supporter.leaderName}</td>
-                      <td className="py-4">
+                      <td className="text-sm text-ink">{supporter.leaderName}</td>
+                      <td className="text-sm">
                         {supporter.electoralZone} / {supporter.electoralSection}
                       </td>
-                      <td className="py-4 text-slate-500">{formatDateTime(supporter.createdAt)}</td>
+                      <td className="text-xs text-slate-400">{formatDateTime(supporter.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

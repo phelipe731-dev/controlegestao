@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Plus, Pencil, Trash2, Eye, ShieldCheck } from 'lucide-react'
 import { Field, SelectInput, TextInput } from '../components/FormControls'
 import { StatusPill } from '../components/StatusPill'
 import { useAuth } from '../context/AuthContext'
@@ -61,80 +62,112 @@ export function SupervisorListPage() {
     },
   })
 
+  const supervisors = data ?? []
+
   return (
-    <div className="app-card p-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
         <div>
-          <div className="text-sm text-slate-500">Estrutura de coordenacao</div>
-          <h2 className="font-display text-2xl font-bold">Lista de supervisores</h2>
+          <div className="section-label">Estrutura de coordenação</div>
+          <h2 className="page-title mt-1">Lista de supervisores</h2>
         </div>
         {user?.role === 'ADMIN' ? (
-          <Link to="/supervisors/new" className="button-primary">
+          <Link to="/supervisors/new" className="button-primary ml-auto">
+            <Plus className="h-4 w-4" />
             Novo supervisor
           </Link>
         ) : null}
       </div>
 
-      {isLoading ? <div className="text-slate-600">Carregando supervisores...</div> : null}
+      {/* Table */}
+      <div className="app-card overflow-hidden">
+        {isLoading && (
+          <div className="divide-y divide-slate-100">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex gap-4 px-4 py-4">
+                <div className="h-4 w-48 animate-pulse rounded bg-slate-100" />
+                <div className="h-4 w-32 animate-pulse rounded bg-slate-100" />
+                <div className="h-4 w-24 animate-pulse rounded bg-slate-100" />
+              </div>
+            ))}
+          </div>
+        )}
 
-      {(data ?? []).length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-slate-500">
-              <tr>
-                <th className="pb-3">Nome</th>
-                <th className="pb-3">Lideres</th>
-                <th className="pb-3">Pode criar lideres</th>
-                <th className="pb-3">Status</th>
-                <th className="pb-3">Atualizado</th>
-                <th className="pb-3 text-right">Acoes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data?.map((supervisor) => (
-                <tr key={supervisor.id}>
-                  <td className="py-4">
-                    <div className="font-semibold">{supervisor.name}</div>
-                    <div className="text-slate-500">{supervisor.email}</div>
-                  </td>
-                  <td className="py-4">{supervisor.leadersCount}</td>
-                  <td className="py-4">{supervisor.canCreateLeaders ? 'Sim' : 'Nao'}</td>
-                  <td className="py-4">
-                    <StatusPill value={supervisor.status} />
-                  </td>
-                  <td className="py-4 text-slate-500">{formatDateTime(supervisor.updatedAt)}</td>
-                  <td className="py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      {user?.role === 'ADMIN' ? (
-                        <>
-                          <Link to={`/supervisors/${supervisor.id}/edit`} className="button-secondary">
-                            Editar
-                          </Link>
-                          <button
-                            type="button"
-                            className="button-danger"
-                            onClick={() => {
-                              if (window.confirm(`Excluir o supervisor ${supervisor.name}?`)) {
-                                deleteMutation.mutate(supervisor.id)
-                              }
-                            }}
-                          >
-                            Excluir
-                          </button>
-                        </>
-                      ) : (
-                        <Link to={`/supervisors/${supervisor.id}/edit`} className="button-secondary">
-                          Visualizar
-                        </Link>
-                      )}
-                    </div>
-                  </td>
+        {!isLoading && supervisors.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <ShieldCheck className="mb-3 h-10 w-10 text-slate-300" />
+            <div className="text-sm font-medium text-slate-500">Nenhum supervisor cadastrado</div>
+            <div className="mt-1 text-xs text-slate-400">Cadastre um novo supervisor para começar.</div>
+          </div>
+        )}
+
+        {supervisors.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Líderes</th>
+                  <th>Pode criar líderes</th>
+                  <th>Status</th>
+                  <th>Atualizado</th>
+                  <th className="text-right">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
+              </thead>
+              <tbody>
+                {supervisors.map((supervisor) => (
+                  <tr key={supervisor.id}>
+                    <td>
+                      <div className="font-medium text-ink">{supervisor.name}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">{supervisor.email}</div>
+                    </td>
+                    <td>{supervisor.leadersCount}</td>
+                    <td>{supervisor.canCreateLeaders ? 'Sim' : 'Não'}</td>
+                    <td>
+                      <StatusPill value={supervisor.status} />
+                    </td>
+                    <td className="text-xs text-slate-400">{formatDateTime(supervisor.updatedAt)}</td>
+                    <td>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {user?.role === 'ADMIN' ? (
+                          <>
+                            <Link to={`/supervisors/${supervisor.id}/edit`} className="button-ghost px-2.5 py-1.5">
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Editar</span>
+                            </Link>
+                            <button
+                              type="button"
+                              title="Excluir"
+                              className="button-ghost px-2.5 py-1.5 text-rose hover:bg-rose/10 hover:text-rose"
+                              onClick={() => {
+                                if (window.confirm(`Excluir o supervisor ${supervisor.name}?`)) {
+                                  deleteMutation.mutate(supervisor.id)
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Excluir</span>
+                            </button>
+                          </>
+                        ) : (
+                          <Link to={`/supervisors/${supervisor.id}/edit`} className="button-ghost px-2.5 py-1.5">
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Visualizar</span>
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
+              {supervisors.length} registro{supervisors.length !== 1 ? 's' : ''} encontrado{supervisors.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -209,57 +242,91 @@ export function SupervisorFormPage() {
     return <div className="app-card p-6 text-slate-600">Somente administradores podem cadastrar supervisores.</div>
   }
 
+  if (isLoading) {
+    return <div className="app-card p-8 text-center text-slate-400">Carregando dados do supervisor...</div>
+  }
+
   return (
-    <div className="app-card p-6">
-      <div className="mb-6">
-        <div className="text-sm text-slate-500">{isEdit ? 'Perfil de supervisao' : 'Novo cadastro de supervisor'}</div>
-        <h2 className="font-display text-2xl font-bold">{isEdit ? (isAdmin ? 'Editar supervisor' : 'Meu perfil de supervisao') : 'Cadastrar supervisor'}</h2>
+    <div className="mx-auto max-w-4xl space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="section-label">{isEdit ? 'Perfil de supervisão' : 'Novo cadastro de supervisor'}</div>
+          <h2 className="page-title mt-1">{isEdit ? (isAdmin ? 'Editar supervisor' : 'Meu perfil de supervisão') : 'Cadastrar supervisor'}</h2>
+        </div>
+        <Link to="/supervisors" className="button-secondary">
+          {isAdmin ? 'Cancelar' : 'Voltar'}
+        </Link>
       </div>
 
-      {isLoading ? <div className="text-slate-600">Carregando dados do supervisor...</div> : null}
+      <form className="space-y-5" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+        {/* Dados de acesso */}
+        <div className="app-card p-5">
+          <div className="mb-4 border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-semibold text-ink">Dados de acesso</h3>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nome completo">
+              <TextInput {...form.register('name', { required: true })} disabled={!isAdmin} />
+            </Field>
+            <Field label="CPF">
+              <TextInput {...form.register('cpf', { required: true })} disabled={!isAdmin} />
+            </Field>
+            <Field label="E-mail">
+              <TextInput type="email" {...form.register('email', { required: true })} disabled={!isAdmin} />
+            </Field>
+            <Field label={isEdit ? 'Nova senha (opcional)' : 'Senha inicial'}>
+              <TextInput type="password" {...form.register('password', { required: !isEdit })} disabled={!isAdmin} />
+            </Field>
+          </div>
+        </div>
 
-      <form className="grid gap-5 md:grid-cols-2" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
-        <Field label="Nome completo">
-          <TextInput {...form.register('name', { required: true })} disabled={!isAdmin} />
-        </Field>
-        <Field label="CPF">
-          <TextInput {...form.register('cpf', { required: true })} disabled={!isAdmin} />
-        </Field>
-        <Field label="Telefone">
-          <TextInput {...form.register('phone')} disabled={!isAdmin} />
-        </Field>
-        <Field label="E-mail">
-          <TextInput type="email" {...form.register('email', { required: true })} disabled={!isAdmin} />
-        </Field>
-        <Field label="Endereco completo">
-          <TextInput {...form.register('fullAddress', { required: true })} disabled={!isAdmin} />
-        </Field>
-        <Field label="Cidade">
-          <TextInput {...form.register('city', { required: true })} disabled={!isAdmin} />
-        </Field>
-        <Field label="Bairro">
-          <TextInput {...form.register('neighborhood', { required: true })} disabled={!isAdmin} />
-        </Field>
-        <Field label="Status">
-          <SelectInput {...form.register('status')} disabled={!isAdmin}>
-            <option value="ACTIVE">Ativo</option>
-            <option value="INACTIVE">Inativo</option>
-          </SelectInput>
-        </Field>
-        <Field label="Permissao para criar lideres">
-          <SelectInput {...form.register('canCreateLeaders')} disabled={!isAdmin}>
-            <option value="true">Sim</option>
-            <option value="false">Nao</option>
-          </SelectInput>
-        </Field>
-        <Field label={isEdit ? 'Nova senha (opcional)' : 'Senha inicial'}>
-          <TextInput type="password" {...form.register('password', { required: !isEdit })} disabled={!isAdmin} />
-        </Field>
+        {/* Contato e endereço */}
+        <div className="app-card p-5">
+          <div className="mb-4 border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-semibold text-ink">Contato e endereço</h3>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Telefone">
+              <TextInput {...form.register('phone')} disabled={!isAdmin} />
+            </Field>
+            <Field label="Endereço completo">
+              <TextInput {...form.register('fullAddress', { required: true })} disabled={!isAdmin} />
+            </Field>
+            <Field label="Cidade">
+              <TextInput {...form.register('city', { required: true })} disabled={!isAdmin} />
+            </Field>
+            <Field label="Bairro">
+              <TextInput {...form.register('neighborhood', { required: true })} disabled={!isAdmin} />
+            </Field>
+          </div>
+        </div>
+
+        {/* Vínculo */}
+        <div className="app-card p-5">
+          <div className="mb-4 border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-semibold text-ink">Vínculo</h3>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Status">
+              <SelectInput {...form.register('status')} disabled={!isAdmin}>
+                <option value="ACTIVE">Ativo</option>
+                <option value="INACTIVE">Inativo</option>
+              </SelectInput>
+            </Field>
+            <Field label="Permissão para criar líderes">
+              <SelectInput {...form.register('canCreateLeaders')} disabled={!isAdmin}>
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+              </SelectInput>
+            </Field>
+          </div>
+        </div>
 
         {isAdmin ? (
-          <div className="md:col-span-2 flex flex-wrap gap-3 pt-2">
+          <div className="flex gap-3">
             <button type="submit" className="button-primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Salvando...' : isEdit ? 'Salvar alteracoes' : 'Criar supervisor'}
+              {mutation.isPending ? 'Salvando...' : isEdit ? 'Salvar alterações' : 'Criar supervisor'}
             </button>
             <Link to="/supervisors" className="button-secondary">
               Cancelar

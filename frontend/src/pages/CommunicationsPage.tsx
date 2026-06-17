@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Mail, MessageSquareMore, QrCode, RadioTower, Send, Smartphone } from 'lucide-react'
+import { Mail, MessageSquareMore, QrCode, RadioTower, Send, Smartphone, Users } from 'lucide-react'
 import { CheckboxInput, Field, SelectInput, TextAreaInput, TextInput } from '../components/FormControls'
 import { api } from '../lib/api'
 import { getErrorMessage } from '../lib/errors'
@@ -13,11 +13,28 @@ const channelIcons: Record<CommunicationChannelType, typeof Smartphone> = {
   EMAIL: Mail,
 }
 
-function MetricTile({ label, value }: { label: string; value: number }) {
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+  bg,
+}: {
+  label: string
+  value: number
+  icon: React.ComponentType<{ className?: string }>
+  color: string
+  bg: string
+}) {
   return (
-    <div className="rounded-[28px] border border-white/60 bg-white/80 p-5 shadow-glow">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 font-display text-4xl font-bold text-ink">{value}</div>
+    <div className="app-card flex items-center gap-4 p-5">
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${bg}`}>
+        <Icon className={`h-5 w-5 ${color}`} />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+        <div className="mt-1 font-display text-3xl font-bold text-ink">{value}</div>
+      </div>
     </div>
   )
 }
@@ -31,10 +48,10 @@ function ChannelCard({
 }) {
   const Icon = channelIcons[channel.type]
   return (
-    <div className="rounded-[30px] border border-white/60 bg-white/85 p-5 shadow-glow">
+    <div className="app-card p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-ink p-3 text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal/10 text-teal">
             <Icon className="h-5 w-5" />
           </div>
           <div>
@@ -44,7 +61,7 @@ function ChannelCard({
             </div>
           </div>
         </div>
-        <span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold text-ink">{statusLabel(channel.status)}</span>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{statusLabel(channel.status)}</span>
       </div>
 
       <div className="mt-5 grid gap-3 text-sm text-slate-600">
@@ -54,12 +71,12 @@ function ChannelCard({
       </div>
 
       {channel.mode === 'QR' ? (
-        <div className="mt-5 rounded-3xl border border-dashed border-slate-200 bg-slate-50/90 p-4">
+        <div className="mt-5 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
             <QrCode className="h-4 w-4" />
             Vinculacao por QR Code
           </div>
-          <div className="mt-3 grid grid-cols-5 gap-1 rounded-2xl bg-white p-3">
+          <div className="mt-3 grid grid-cols-5 gap-1 rounded-lg bg-white p-3">
             {Array.from({ length: 25 }).map((_, index) => (
               <div
                 key={`${channel.id}-${index}`}
@@ -187,44 +204,32 @@ export function CommunicationsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[34px] bg-ink p-6 text-white shadow-glow">
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <div>
-            <div className="text-xs uppercase tracking-[0.25em] text-white/55">Disparo e relacionamento</div>
-            <h2 className="mt-3 font-display text-4xl font-bold">Central de comunicacao omnichannel</h2>
-            <p className="mt-4 max-w-2xl text-sm text-white/72">
-              Configure APIs de WhatsApp, use pareamento via QR Code para Business ou monte campanhas SMS e e-mail.
-              A mesma tela tambem prepara avisos para toda a base cadastrada.
-            </p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-4">
-              <MetricTile label="Canais ativos" value={overview.metrics.connectedChannels} />
-              <MetricTile label="Campanhas na fila" value={overview.metrics.queuedCampaigns} />
-              <MetricTile label="Nao lidas" value={overview.metrics.unreadInbox} />
-              <MetricTile label="Alcance da base" value={overview.metrics.baseReach} />
-            </div>
-          </div>
+      <div>
+        <div className="section-label">Disparo e relacionamento</div>
+        <h2 className="page-title mt-1">Central de comunicacao omnichannel</h2>
+      </div>
 
-          <div className="rounded-[30px] border border-white/10 bg-white/10 p-5">
-            <div className="text-sm uppercase tracking-[0.2em] text-white/55">Canal preferencial</div>
-            <div className="mt-3 font-display text-2xl font-bold">{defaultChannel?.name}</div>
-            <div className="mt-2 text-sm text-white/72">
-              {defaultChannel ? `${statusLabel(defaultChannel.type)} em modo ${statusLabel(defaultChannel.mode)}` : 'Nenhum canal configurado'}
-            </div>
-            <div className="mt-6 rounded-3xl bg-white/10 p-4 text-sm text-white/75">
-              Use QR quando quiser operar o WhatsApp Business localmente, ou API quando a campanha precisar de automacao escalavel.
-            </div>
-          </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Canais ativos" value={overview.metrics.connectedChannels} icon={RadioTower} color="text-teal" bg="bg-teal/10" />
+        <StatCard label="Campanhas na fila" value={overview.metrics.queuedCampaigns} icon={Send} color="text-blue-600" bg="bg-blue-50" />
+        <StatCard label="Nao lidas" value={overview.metrics.unreadInbox} icon={MessageSquareMore} color="text-amber" bg="bg-amber/10" />
+        <StatCard label="Alcance da base" value={overview.metrics.baseReach} icon={Users} color="text-emerald-600" bg="bg-emerald-50" />
+      </div>
+
+      <div className="app-card p-5">
+        <div className="section-label">Canal preferencial</div>
+        <h3 className="mt-1 font-display text-base font-bold text-ink">{defaultChannel?.name ?? 'Nenhum canal configurado'}</h3>
+        <div className="mt-2 text-sm text-slate-500">
+          {defaultChannel ? `${statusLabel(defaultChannel.type)} em modo ${statusLabel(defaultChannel.mode)}` : 'Configure um canal para iniciar os disparos.'}
         </div>
-      </section>
+      </div>
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="space-y-6">
-          <div className="rounded-[30px] border border-white/60 bg-white/85 p-6 shadow-glow">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <div className="text-sm text-slate-500">Conectores</div>
-                <h3 className="font-display text-2xl font-bold text-ink">Canais configurados</h3>
-              </div>
+          <div className="app-card p-6">
+            <div className="mb-5 border-b border-slate-100 pb-4">
+              <div className="section-label">Conectores</div>
+              <h3 className="mt-1 font-display text-base font-bold text-ink">Canais configurados</h3>
             </div>
             <div className="grid gap-4 xl:grid-cols-2">
               {overview.channels.map((channel) => (
@@ -233,12 +238,12 @@ export function CommunicationsPage() {
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-white/60 bg-white/85 p-6 shadow-glow">
-            <div className="text-sm text-slate-500">Fila de campanhas</div>
-            <h3 className="mt-2 font-display text-2xl font-bold text-ink">Disparos recentes</h3>
+          <div className="app-card p-6">
+            <div className="section-label">Fila de campanhas</div>
+            <h3 className="mt-1 font-display text-base font-bold text-ink">Disparos recentes</h3>
             <div className="mt-5 space-y-3">
               {overview.campaigns.map((campaign) => (
-                <div key={campaign.id} className="rounded-3xl border border-slate-100 bg-slate-50/90 p-4">
+                <div key={campaign.id} className="rounded-lg border border-slate-100 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="font-semibold text-ink">{campaign.title}</div>
@@ -246,7 +251,7 @@ export function CommunicationsPage() {
                         {campaign.channelName} • {statusLabel(campaign.audienceType)} • {campaign.notifyAllBase ? 'Toda a base' : 'Segmentado'}
                       </div>
                     </div>
-                    <span className="rounded-full bg-sand px-3 py-1 text-xs font-semibold text-ink">{statusLabel(campaign.status)}</span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{statusLabel(campaign.status)}</span>
                   </div>
                   <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
                     <div>Destinatarios: {campaign.recipientsCount}</div>
@@ -260,9 +265,9 @@ export function CommunicationsPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-[30px] border border-white/60 bg-white/85 p-6 shadow-glow">
-            <div className="text-sm text-slate-500">Novo conector</div>
-            <h3 className="mt-2 font-display text-2xl font-bold text-ink">Preparar integracao</h3>
+          <div className="app-card p-6">
+            <div className="section-label">Novo conector</div>
+            <h3 className="mt-1 font-display text-base font-bold text-ink">Preparar integracao</h3>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <Field label="Nome do canal">
                 <TextInput value={channelForm.name} onChange={(event) => setChannelForm((current) => ({ ...current, name: event.target.value }))} />
@@ -303,12 +308,12 @@ export function CommunicationsPage() {
             </button>
           </div>
 
-          <div className="rounded-[30px] border border-white/60 bg-white/85 p-6 shadow-glow">
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Send className="h-4 w-4" />
+          <div className="app-card p-6">
+            <div className="flex items-center gap-2 section-label">
+              <Send className="h-3.5 w-3.5" />
               Nova campanha
             </div>
-            <h3 className="mt-2 font-display text-2xl font-bold text-ink">Notificar toda a base ou segmentar</h3>
+            <h3 className="mt-1 font-display text-base font-bold text-ink">Notificar toda a base ou segmentar</h3>
             <div className="mt-5 grid gap-4">
               <Field label="Titulo">
                 <TextInput value={campaignForm.title} onChange={(event) => setCampaignForm((current) => ({ ...current, title: event.target.value }))} />
@@ -374,18 +379,18 @@ export function CommunicationsPage() {
             </button>
           </div>
 
-          <div className="rounded-[30px] border border-white/60 bg-white/85 p-6 shadow-glow">
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <MessageSquareMore className="h-4 w-4" />
+          <div className="app-card p-6">
+            <div className="flex items-center gap-2 section-label">
+              <MessageSquareMore className="h-3.5 w-3.5" />
               Caixa de entrada
             </div>
-            <h3 className="mt-2 font-display text-2xl font-bold text-ink">Respostas da base</h3>
+            <h3 className="mt-1 font-display text-base font-bold text-ink">Respostas da base</h3>
             <div className="mt-5 space-y-3">
               {overview.inbox.map((item) => (
                 <button
                   type="button"
                   key={item.id}
-                  className={`w-full rounded-3xl border p-4 text-left transition ${item.readAt ? 'border-slate-100 bg-slate-50/70' : 'border-teal/20 bg-teal/5'}`}
+                  className={`w-full rounded-lg border p-4 text-left transition ${item.readAt ? 'border-slate-100 bg-slate-50' : 'border-teal/20 bg-teal/5'}`}
                   onClick={() => {
                     if (!item.readAt) {
                       markReadMutation.mutate(item.id)

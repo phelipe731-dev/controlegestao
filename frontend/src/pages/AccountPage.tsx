@@ -83,8 +83,10 @@ export function AccountPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
       <section className="app-card p-6">
-        <div className="text-sm text-slate-500">Dados pessoais</div>
-        <h2 className="mt-2 font-display text-2xl font-bold">Minha conta</h2>
+        <div className="border-b border-slate-100 pb-4">
+          <div className="section-label">Dados pessoais</div>
+          <h2 className="mt-1 font-display text-base font-bold text-ink">Minha conta</h2>
+        </div>
 
         <form className="mt-6 grid gap-5 md:grid-cols-2" onSubmit={profileForm.handleSubmit((values) => profileMutation.mutate(values))}>
           <Field label="Nome completo">
@@ -117,8 +119,10 @@ export function AccountPage() {
       </section>
 
       <section className="app-card p-6">
-        <div className="text-sm text-slate-500">Seguranca</div>
-        <h2 className="mt-2 font-display text-2xl font-bold">Trocar senha</h2>
+        <div className="border-b border-slate-100 pb-4">
+          <div className="section-label">Seguranca</div>
+          <h2 className="mt-1 font-display text-base font-bold text-ink">Trocar senha</h2>
+        </div>
 
         <form className="mt-6 space-y-5" onSubmit={passwordForm.handleSubmit((values) => passwordMutation.mutate(values))}>
           <Field label="Senha atual">

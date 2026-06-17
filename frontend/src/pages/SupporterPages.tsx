@@ -89,16 +89,19 @@ export function SupporterListPage() {
     enabled: user?.role !== 'LEADER',
   })
 
-  const { data, isLoading } = useQuery({
+  const { data, error, isError, isLoading } = useQuery({
     queryKey: ['supporters', filters, page],
     queryFn: async () => {
+      const filledFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, value]) => value.trim() !== ''),
+      )
       const response = await api.get<{
         supporters: Supporter[]
         total: number
         page: number
         limit: number
         totalPages: number
-      }>('/supporters', { params: { ...filters, page, limit: pageSize } })
+      }>('/supporters', { params: { ...filledFilters, page, limit: pageSize } })
       return response.data
     },
   })
@@ -238,7 +241,14 @@ export function SupporterListPage() {
           </div>
         )}
 
-        {!isLoading && supporters.length === 0 && (
+        {isError && (
+          <div className="m-4 rounded-xl border border-rose/20 bg-rose/5 p-4 text-sm text-rose">
+            <div className="font-semibold">Não foi possível carregar os apoiadores.</div>
+            <div className="mt-1 text-xs">{getErrorMessage(error)}</div>
+          </div>
+        )}
+
+        {!isLoading && !isError && supporters.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <UserCheck className="mb-3 h-10 w-10 text-slate-300" />
             <div className="text-sm font-medium text-slate-500">Nenhum apoiador encontrado</div>

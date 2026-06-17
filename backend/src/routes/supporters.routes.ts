@@ -17,6 +17,8 @@ supportersRouter.use(authenticate)
 
 const consentSourceSchema = z.enum(['WEB_FORM', 'PRESENTIAL', 'EVENT', 'WHATSAPP', 'PHONE', 'OTHER'])
 const supporterStatusSchema = z.enum(['ACTIVE', 'ARCHIVED', 'ANONYMIZED'])
+const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
+const optionalQueryString = z.preprocess(emptyToUndefined, z.string().optional())
 
 const supporterPayloadSchema = z.object({
   fullName: z.string().min(3),
@@ -41,14 +43,14 @@ const supporterPayloadSchema = z.object({
 })
 
 const supporterQuerySchema = z.object({
-  search: z.string().optional(),
-  leaderId: z.string().optional(),
-  city: z.string().optional(),
-  neighborhood: z.string().optional(),
-  electoralZone: z.string().optional(),
-  status: supporterStatusSchema.optional(),
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(25),
+  search: optionalQueryString,
+  leaderId: optionalQueryString,
+  city: optionalQueryString,
+  neighborhood: optionalQueryString,
+  electoralZone: optionalQueryString,
+  status: z.preprocess(emptyToUndefined, supporterStatusSchema.optional()),
+  page: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().default(1)),
+  limit: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).max(100).default(25)),
 })
 
 const transferSchema = z.object({

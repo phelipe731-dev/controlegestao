@@ -6,15 +6,12 @@
 
 @layer base {
   :root {
-    color: #102127;
-    background:
-      radial-gradient(circle at top right, rgba(200, 132, 58, 0.18), transparent 30%),
-      radial-gradient(circle at 15% 20%, rgba(15, 118, 110, 0.14), transparent 38%),
-      #eff4f2;
+    color: #0f172a;
+    background: #f1f5f9;
   }
 
   body {
-    @apply min-h-screen bg-mist bg-campaign-grid font-body text-ink antialiased;
+    @apply min-h-screen bg-mist font-body text-ink antialiased;
   }
 
   #root {
@@ -29,27 +26,82 @@
 }
 
 @layer components {
+  /* Card padrão CRM */
   .app-card {
-    @apply rounded-3xl border border-white/50 bg-white/85 shadow-glow backdrop-blur;
+    @apply rounded-xl border border-slate-200 bg-white shadow-card;
   }
 
+  /* Inputs */
   .field-base {
-    @apply w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink transition focus:border-teal focus:ring-2 focus:ring-teal/15;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-400 transition
+      focus:border-teal focus:ring-2 focus:ring-teal/20
+      disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400;
   }
 
   .label-base {
-    @apply mb-2 block text-sm font-semibold text-slate-600;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500;
   }
 
+  /* Buttons */
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-teal px-4 py-2 text-sm font-semibold text-white transition
+      hover:bg-teal-dark active:scale-95
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-teal hover:text-teal disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition
+      hover:border-slate-400 hover:bg-slate-50 active:scale-95
+      disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .button-danger {
-    @apply inline-flex items-center justify-center rounded-2xl bg-rose px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose/90 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rose/30 bg-rose/10 px-4 py-2 text-sm font-semibold text-rose transition
+      hover:bg-rose hover:text-white active:scale-95
+      disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .button-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition
+      hover:bg-slate-100 hover:text-slate-900 active:scale-95;
+  }
+
+  /* Table */
+  .crm-table {
+    @apply min-w-full text-sm;
+  }
+
+  .crm-table thead tr {
+    @apply border-b border-slate-200 bg-slate-50;
+  }
+
+  .crm-table thead th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+
+  .crm-table tbody tr {
+    @apply border-b border-slate-100 transition hover:bg-slate-50/70;
+  }
+
+  .crm-table tbody td {
+    @apply px-4 py-3.5 align-middle;
+  }
+
+  /* Page header */
+  .page-header {
+    @apply mb-6 flex flex-wrap items-center justify-between gap-4;
+  }
+
+  .page-title {
+    @apply font-display text-2xl font-bold text-ink;
+  }
+
+  .page-subtitle {
+    @apply mt-0.5 text-sm text-slate-500;
+  }
+
+  /* Section label */
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-widest text-slate-400;
   }
 }

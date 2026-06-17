@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { ShieldCheck, Vote, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { getErrorMessage } from '../lib/errors'
@@ -13,91 +14,132 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (user) {
-    return <Navigate to="/" replace />
-  }
+  if (user) return <Navigate to="/" replace />
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitting(true)
     setError(null)
-
     try {
       await login(email, password)
       navigate('/')
-    } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Nao foi possivel iniciar a sessao.'))
+    } catch (e) {
+      setError(getErrorMessage(e, 'Não foi possível iniciar a sessão.'))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-campaign-grid px-4 py-10">
-      <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="app-card overflow-hidden bg-ink text-white">
-          <div className="h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.14),transparent_30%),linear-gradient(145deg,#102127,#0f766e)] p-8 sm:p-10">
-            <div className="text-xs uppercase tracking-[0.3em] text-white/55">CampanhaHub</div>
-            <h1 className="mt-4 font-display text-4xl font-bold leading-tight sm:text-5xl">
-              Gestao segura da operacao de campanha
-            </h1>
-            <p className="mt-5 max-w-xl text-base text-white/72">
-              Controle apoiadores, lideres, supervisores e auditoria em um fluxo unico com consentimento LGPD registrado.
-            </p>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-5">
-                <div className="text-sm text-white/60">Cadastro protegido</div>
-                <div className="mt-2 text-xl font-semibold">Sem duplicidade por CPF e titulo</div>
+    <div className="flex min-h-screen">
+      {/* Left panel */}
+      <div className="hidden w-[480px] shrink-0 flex-col bg-sidebar p-12 lg:flex">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal font-display text-sm font-bold text-white">
+            CH
+          </div>
+          <div>
+            <div className="font-display text-sm font-bold text-white">CampanhaHub</div>
+            <div className="text-[10px] uppercase tracking-widest text-white/40">Operação de campo</div>
+          </div>
+        </div>
+
+        <div className="mt-auto">
+          <h1 className="font-display text-4xl font-bold leading-snug text-white">
+            Gestão segura da operação de campanha
+          </h1>
+          <p className="mt-4 text-sm leading-relaxed text-white/60">
+            Controle apoiadores, líderes e supervisores com auditoria completa e consentimento LGPD registrado.
+          </p>
+
+          <div className="mt-10 space-y-3">
+            <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <Vote className="mt-0.5 h-5 w-5 shrink-0 text-teal" />
+              <div>
+                <div className="text-sm font-semibold text-white">Cadastro protegido</div>
+                <div className="mt-0.5 text-xs text-white/50">Sem duplicidade por CPF e título eleitoral</div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-5">
-                <div className="text-sm text-white/60">Auditoria ativa</div>
-                <div className="mt-2 text-xl font-semibold">Logs de acesso, alteracao e transferencia</div>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-teal" />
+              <div>
+                <div className="text-sm font-semibold text-white">Auditoria ativa</div>
+                <div className="mt-0.5 text-xs text-white/50">Logs de acesso, alteração e transferência</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <Users className="mt-0.5 h-5 w-5 shrink-0 text-teal" />
+              <div>
+                <div className="text-sm font-semibold text-white">Gestão hierárquica</div>
+                <div className="mt-0.5 text-xs text-white/50">Admin, supervisor e líder com permissões distintas</div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <section className="app-card p-8 sm:p-10">
-          <div className="text-sm uppercase tracking-[0.25em] text-slate-500">Acesso interno</div>
-          <h2 className="mt-3 font-display text-3xl font-bold text-ink">Entrar na plataforma</h2>
-          <p className="mt-3 text-sm text-slate-600">
-            Use as credenciais da equipe ou as contas seed para validar o MVP localmente.
-          </p>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <Field label="E-mail">
-              <TextInput value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@campanha.local" />
-            </Field>
-            <Field label="Senha">
-              <TextInput
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="********"
-              />
-            </Field>
-
-            {error ? <div className="rounded-2xl border border-rose/20 bg-rose/10 px-4 py-3 text-sm text-rose">{error}</div> : null}
-
-            <button type="submit" className="button-primary w-full" disabled={submitting}>
-              {submitting ? 'Entrando...' : 'Acessar painel'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-sm text-slate-600">
-            Esqueceu a senha?{' '}
-            <Link to="/forgot-password" className="font-semibold text-teal hover:text-ink">
-              Recuperar acesso
-            </Link>
+      {/* Right panel — form */}
+      <div className="flex flex-1 items-center justify-center bg-mist px-6 py-12">
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal font-display text-sm font-bold text-white">
+              CH
+            </div>
+            <div className="font-display text-sm font-bold text-ink">CampanhaHub</div>
           </div>
 
-          <div className="mt-8 rounded-3xl bg-sand p-5 text-sm text-slate-700">
-            <div className="font-semibold text-ink">Credenciais seed</div>
-            <div className="mt-2">Administrador: `admin@campanha.local` / `Admin@123`</div>
-            <div>Supervisor: `supervisor@campanha.local` / `Supervisor@123`</div>
-            <div>Lider: `lider@campanha.local` / `Lider@123`</div>
+          <div className="app-card p-8 shadow-card-md">
+            <h2 className="font-display text-2xl font-bold text-ink">Entrar na plataforma</h2>
+            <p className="mt-1.5 text-sm text-slate-500">Use suas credenciais de acesso para continuar.</p>
+
+            <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+              <Field label="E-mail">
+                <TextInput
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@campanha.local"
+                />
+              </Field>
+              <Field label="Senha">
+                <TextInput
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+              </Field>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg border border-rose/20 bg-rose/5 px-4 py-3 text-sm text-rose">
+                  {error}
+                </div>
+              )}
+
+              <button type="submit" className="button-primary w-full py-2.5" disabled={submitting}>
+                {submitting ? 'Entrando...' : 'Acessar painel'}
+              </button>
+            </form>
+
+            <div className="mt-5 text-center text-sm text-slate-500">
+              Esqueceu a senha?{' '}
+              <Link to="/forgot-password" className="font-semibold text-teal hover:text-teal-dark">
+                Recuperar acesso
+              </Link>
+            </div>
           </div>
-        </section>
+
+          {/* Dev credentials */}
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">
+            <div className="mb-2 font-semibold text-slate-700">Credenciais de desenvolvimento</div>
+            <div className="space-y-1 font-mono">
+              <div><span className="text-slate-400">Admin:</span> admin@campanha.local / Admin@123</div>
+              <div><span className="text-slate-400">Supervisor:</span> supervisor@campanha.local / Supervisor@123</div>
+              <div><span className="text-slate-400">Líder:</span> lider@campanha.local / Lider@123</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -115,12 +157,11 @@ export function ForgotPasswordPage() {
     event.preventDefault()
     setError(null)
     setRequestMessage(null)
-
     try {
       const { data } = await api.post<{ message: string; resetToken?: string }>('/auth/forgot-password', { email })
       setRequestMessage(data.resetToken ? `${data.message} Token dev: ${data.resetToken}` : data.message)
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Nao foi possivel gerar o token.'))
+    } catch (e) {
+      setError(getErrorMessage(e, 'Não foi possível gerar o token.'))
     }
   }
 
@@ -128,62 +169,68 @@ export function ForgotPasswordPage() {
     event.preventDefault()
     setError(null)
     setFeedback(null)
-
     try {
-      const { data } = await api.post<{ message: string }>('/auth/reset-password', {
-        token: resetToken,
-        password: newPassword,
-      })
+      const { data } = await api.post<{ message: string }>('/auth/reset-password', { token: resetToken, password: newPassword })
       setFeedback(data.message)
       setResetToken('')
       setNewPassword('')
-    } catch (requestError) {
-      setError(getErrorMessage(requestError, 'Nao foi possivel redefinir a senha.'))
+    } catch (e) {
+      setError(getErrorMessage(e, 'Não foi possível redefinir a senha.'))
     }
   }
 
   return (
-    <div className="min-h-screen px-4 py-10">
-      <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-2">
-        <section className="app-card p-8">
-          <div className="text-sm uppercase tracking-[0.25em] text-slate-500">Recuperacao</div>
-          <h1 className="mt-3 font-display text-3xl font-bold">Gerar token de redefinicao</h1>
-          <p className="mt-3 text-sm text-slate-600">
-            Como este MVP nao envia e-mail, o token aparece na resposta em ambiente local.
-          </p>
-          <form onSubmit={handleRequestToken} className="mt-8 space-y-5">
-            <Field label="E-mail">
-              <TextInput value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@campanha.local" />
-            </Field>
-            <button type="submit" className="button-primary">
-              Gerar token
-            </button>
-          </form>
-          {requestMessage ? <div className="mt-5 rounded-2xl bg-teal/10 px-4 py-3 text-sm text-teal">{requestMessage}</div> : null}
-        </section>
-
-        <section className="app-card p-8">
-          <div className="text-sm uppercase tracking-[0.25em] text-slate-500">Nova senha</div>
-          <h2 className="mt-3 font-display text-3xl font-bold">Concluir redefinicao</h2>
-          <form onSubmit={handleResetPassword} className="mt-8 space-y-5">
-            <Field label="Token">
-              <TextInput value={resetToken} onChange={(event) => setResetToken(event.target.value)} />
-            </Field>
-            <Field label="Nova senha">
-              <TextInput type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-            </Field>
-            <button type="submit" className="button-primary">
-              Atualizar senha
-            </button>
-          </form>
-
-          {feedback ? <div className="mt-5 rounded-2xl bg-teal/10 px-4 py-3 text-sm text-teal">{feedback}</div> : null}
-          {error ? <div className="mt-5 rounded-2xl bg-rose/10 px-4 py-3 text-sm text-rose">{error}</div> : null}
-
-          <Link to="/login" className="mt-6 inline-flex text-sm font-semibold text-teal hover:text-ink">
-            Voltar para o login
+    <div className="flex min-h-screen items-center justify-center bg-mist px-4 py-12">
+      <div className="w-full max-w-3xl">
+        <div className="mb-6">
+          <Link to="/login" className="text-sm font-medium text-teal hover:text-teal-dark">
+            ← Voltar para o login
           </Link>
-        </section>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div className="app-card p-6 shadow-card-md">
+            <h1 className="font-display text-xl font-bold text-ink">Gerar token de redefinição</h1>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Em ambiente local, o token aparece diretamente na resposta.
+            </p>
+            <form onSubmit={handleRequestToken} className="mt-6 space-y-4">
+              <Field label="E-mail">
+                <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@campanha.local" />
+              </Field>
+              <button type="submit" className="button-primary">Gerar token</button>
+            </form>
+            {requestMessage && (
+              <div className="mt-4 rounded-lg border border-teal/20 bg-teal/5 px-4 py-3 text-sm text-teal-dark">
+                {requestMessage}
+              </div>
+            )}
+          </div>
+
+          <div className="app-card p-6 shadow-card-md">
+            <h2 className="font-display text-xl font-bold text-ink">Concluir redefinição</h2>
+            <p className="mt-1.5 text-sm text-slate-500">Cole o token recebido e defina a nova senha.</p>
+            <form onSubmit={handleResetPassword} className="mt-6 space-y-4">
+              <Field label="Token">
+                <TextInput value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder="Cole o token aqui" />
+              </Field>
+              <Field label="Nova senha">
+                <TextInput type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" />
+              </Field>
+              <button type="submit" className="button-primary">Atualizar senha</button>
+            </form>
+            {feedback && (
+              <div className="mt-4 rounded-lg border border-teal/20 bg-teal/5 px-4 py-3 text-sm text-teal-dark">
+                {feedback}
+              </div>
+            )}
+            {error && (
+              <div className="mt-4 rounded-lg border border-rose/20 bg-rose/5 px-4 py-3 text-sm text-rose">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

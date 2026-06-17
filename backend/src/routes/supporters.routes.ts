@@ -47,6 +47,8 @@ const supporterQuerySchema = z.object({
   neighborhood: z.string().optional(),
   electoralZone: z.string().optional(),
   status: supporterStatusSchema.optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
 })
 
 const transferSchema = z.object({
@@ -104,16 +106,27 @@ supportersRouter.get(
   authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
   asyncHandler(async (request, response) => {
     const filters = supporterQuerySchema.parse(request.query)
-    const supporters = await prisma.supporter.findMany({
-      where: buildSupporterWhere(request.user!, filters),
-      include: supporterListInclude,
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+    const where = buildSupporterWhere(request.user!, filters)
+    const skip = (filters.page - 1) * filters.limit
+    const [supporters, total] = await Promise.all([
+      prisma.supporter.findMany({
+        where,
+        include: supporterListInclude,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: filters.limit,
+      }),
+      prisma.supporter.count({ where }),
+    ])
 
     response.json({
       supporters: supporters.map(serializeSupporter),
+      total,
+      page: filters.page,
+      limit: filters.limit,
+      totalPages: Math.max(Math.ceil(total / filters.limit), 1),
     })
   }),
 )

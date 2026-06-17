@@ -67,6 +67,8 @@ const initialForm: SupporterFormValues = {
 export function SupporterListPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const pageSize = 25
   const [filters, setFilters] = useState<SupporterFilters>({
     search: '',
     leaderId: '',
@@ -88,10 +90,16 @@ export function SupporterListPage() {
   })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['supporters', filters],
+    queryKey: ['supporters', filters, page],
     queryFn: async () => {
-      const response = await api.get<{ supporters: Supporter[] }>('/supporters', { params: filters })
-      return response.data.supporters
+      const response = await api.get<{
+        supporters: Supporter[]
+        total: number
+        page: number
+        limit: number
+        totalPages: number
+      }>('/supporters', { params: { ...filters, page, limit: pageSize } })
+      return response.data
     },
   })
 
@@ -121,9 +129,15 @@ export function SupporterListPage() {
     onError: (error) => alert(getErrorMessage(error)),
   })
 
-  const supporters = data ?? []
+  const supporters = data?.supporters ?? []
+  const totalSupporters = data?.total ?? 0
+  const totalPages = data?.totalPages ?? 1
   const canWrite = user?.role === 'ADMIN' || user?.role === 'LEADER'
   const activeFilters = Object.values(filters).filter(Boolean).length
+  const updateFilters = (updater: (current: SupporterFilters) => SupporterFilters) => {
+    setPage(1)
+    setFilters(updater)
+  }
 
   return (
     <div className="space-y-4">
@@ -136,7 +150,7 @@ export function SupporterListPage() {
             className="field-base pl-9"
             placeholder="Buscar por nome, CPF ou título..."
             value={filters.search}
-            onChange={(e) => setFilters((c) => ({ ...c, search: e.target.value }))}
+            onChange={(e) => updateFilters((c) => ({ ...c, search: e.target.value }))}
           />
         </div>
 
@@ -169,7 +183,7 @@ export function SupporterListPage() {
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
             {user?.role !== 'LEADER' && (
               <Field label="Líder">
-                <SelectInput value={filters.leaderId} onChange={(e) => setFilters((c) => ({ ...c, leaderId: e.target.value }))}>
+                <SelectInput value={filters.leaderId} onChange={(e) => updateFilters((c) => ({ ...c, leaderId: e.target.value }))}>
                   <option value="">Todos</option>
                   {(leaders ?? []).map((l) => (
                     <option key={l.id} value={l.id}>{l.name}</option>
@@ -178,16 +192,16 @@ export function SupporterListPage() {
               </Field>
             )}
             <Field label="Cidade">
-              <TextInput value={filters.city} onChange={(e) => setFilters((c) => ({ ...c, city: e.target.value }))} placeholder="Ex: São Paulo" />
+              <TextInput value={filters.city} onChange={(e) => updateFilters((c) => ({ ...c, city: e.target.value }))} placeholder="Ex: São Paulo" />
             </Field>
             <Field label="Bairro">
-              <TextInput value={filters.neighborhood} onChange={(e) => setFilters((c) => ({ ...c, neighborhood: e.target.value }))} />
+              <TextInput value={filters.neighborhood} onChange={(e) => updateFilters((c) => ({ ...c, neighborhood: e.target.value }))} />
             </Field>
             <Field label="Zona eleitoral">
-              <TextInput value={filters.electoralZone} onChange={(e) => setFilters((c) => ({ ...c, electoralZone: e.target.value }))} />
+              <TextInput value={filters.electoralZone} onChange={(e) => updateFilters((c) => ({ ...c, electoralZone: e.target.value }))} />
             </Field>
             <Field label="Status">
-              <SelectInput value={filters.status} onChange={(e) => setFilters((c) => ({ ...c, status: e.target.value }))}>
+              <SelectInput value={filters.status} onChange={(e) => updateFilters((c) => ({ ...c, status: e.target.value }))}>
                 <option value="">Todos</option>
                 <option value="ACTIVE">Ativo</option>
                 <option value="ARCHIVED">Arquivado</option>
@@ -199,7 +213,10 @@ export function SupporterListPage() {
             <button
               type="button"
               className="button-ghost text-xs"
-              onClick={() => setFilters({ search: '', leaderId: '', city: '', neighborhood: '', electoralZone: '', status: '' })}
+              onClick={() => {
+                setPage(1)
+                setFilters({ search: '', leaderId: '', city: '', neighborhood: '', electoralZone: '', status: '' })
+              }}
             >
               Limpar filtros
             </button>
@@ -326,8 +343,31 @@ export function SupporterListPage() {
                 ))}
               </tbody>
             </table>
-            <div className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
-              {supporters.length} registro{supporters.length !== 1 ? 's' : ''} encontrado{supporters.length !== 1 ? 's' : ''}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
+              <span>
+                Exibindo {supporters.length} de {totalSupporters} registro{totalSupporters !== 1 ? 's' : ''}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="button-secondary px-3 py-1.5 text-xs"
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                >
+                  Anterior
+                </button>
+                <span>
+                  Página {page} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="button-secondary px-3 py-1.5 text-xs"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
+                >
+                  Próxima
+                </button>
+              </div>
             </div>
           </div>
         )}

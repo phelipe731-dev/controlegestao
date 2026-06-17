@@ -224,14 +224,14 @@ export function CommunicationsPage() {
         </div>
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <section className="space-y-6">
         <div className="space-y-6">
           <div className="app-card p-6">
             <div className="mb-5 border-b border-slate-100 pb-4">
               <div className="section-label">Conectores</div>
               <h3 className="mt-1 font-display text-base font-bold text-ink">Canais configurados</h3>
             </div>
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               {overview.channels.map((channel) => (
                 <ChannelCard key={channel.id} channel={channel} onRefreshQr={(id) => refreshQrMutation.mutate(id)} />
               ))}
@@ -268,7 +268,7 @@ export function CommunicationsPage() {
           <div className="app-card p-6">
             <div className="section-label">Novo conector</div>
             <h3 className="mt-1 font-display text-base font-bold text-ink">Preparar integracao</h3>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <Field label="Nome do canal">
                 <TextInput value={channelForm.name} onChange={(event) => setChannelForm((current) => ({ ...current, name: event.target.value }))} />
               </Field>
@@ -324,7 +324,7 @@ export function CommunicationsPage() {
               <Field label="Mensagem">
                 <TextAreaInput value={campaignForm.body} onChange={(event) => setCampaignForm((current) => ({ ...current, body: event.target.value }))} />
               </Field>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <Field label="Canal">
                   <SelectInput value={campaignForm.channelConfigId} onChange={(event) => setCampaignForm((current) => ({ ...current, channelConfigId: event.target.value }))}>
                     <option value="">Selecione</option>

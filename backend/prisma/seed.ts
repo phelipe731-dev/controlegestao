@@ -16,6 +16,26 @@ const prisma = new PrismaClient()
 
 const normalizeDigits = (value: string) => value.replace(/\D/g, '')
 
+type SupporterSeed = {
+  fullName: string
+  cpf: string
+  phone: string
+  birthDate: Date
+  postalCode: string
+  street: string
+  number: string
+  complement: string | null
+  neighborhood: string
+  city: string
+  state: string
+  voterRegistration: string
+  electoralZone: string
+  electoralSection: string
+  notes: string
+  leaderId?: string
+  createdByUserId?: string
+}
+
 async function upsertRole(name: RoleName, description: string) {
   return prisma.role.upsert({
     where: { name },
@@ -114,7 +134,191 @@ async function main() {
     },
   })
 
-  const supportersSeed = [
+  const seedLeaders: Array<{ id: string; userId: string }> = [{ id: leader.id, userId: leaderUser.id }]
+  const seedSupervisors = [{ id: supervisor.id, userId: supervisorUser.id }]
+
+  const supervisorNames = ['Ana Paula Monteiro', 'Bruno Almeida Costa', 'Carla Mendes Rocha']
+
+  for (const [index, name] of supervisorNames.entries()) {
+    const sequence = index + 1
+    const phone = `(11) 97000-${String(sequence).padStart(4, '0')}`
+    const user = await prisma.user.upsert({
+      where: { email: `supervisor${sequence}@campanha.local` },
+      update: {
+        roleId: supervisorRole.id,
+        passwordHash: supervisorPassword,
+        status: 'ACTIVE',
+      },
+      create: {
+        roleId: supervisorRole.id,
+        name,
+        email: `supervisor${sequence}@campanha.local`,
+        cpf: String(10000000010 + sequence),
+        phone,
+        phoneNormalized: normalizeDigits(phone),
+        passwordHash: supervisorPassword,
+        fullAddress: `Rua dos Supervisores, ${100 + sequence}`,
+        city: sequence === 3 ? 'Cidade Vizinha' : 'Cidade Base',
+        neighborhood: ['Centro', 'Zona Norte', 'Bela Vista'][index],
+      },
+    })
+
+    const supervisorProfile = await prisma.supervisor.upsert({
+      where: { userId: user.id },
+      update: { canCreateLeaders: true },
+      create: {
+        userId: user.id,
+        canCreateLeaders: true,
+      },
+    })
+
+    seedSupervisors.push({ id: supervisorProfile.id, userId: user.id })
+  }
+
+  const leaderNames = [
+    'Amanda Reis',
+    'Andre Luiz Batista',
+    'Bianca Farias',
+    'Caio Henrique Lima',
+    'Daniela Barbosa',
+    'Eduardo Nunes',
+    'Fernanda Castro',
+    'Gabriel Moraes',
+    'Helena Duarte',
+    'Igor Martins',
+    'Juliana Pires',
+    'Marcos Vinicius',
+  ]
+
+  for (const [index, name] of leaderNames.entries()) {
+    const sequence = index + 1
+    const phone = `(11) 97111-${String(sequence).padStart(4, '0')}`
+    const assignedSupervisor = seedSupervisors[index % seedSupervisors.length]
+    const user = await prisma.user.upsert({
+      where: { email: `lider${sequence}@campanha.local` },
+      update: {
+        roleId: leaderRole.id,
+        passwordHash: leaderPassword,
+        status: 'ACTIVE',
+      },
+      create: {
+        roleId: leaderRole.id,
+        name,
+        email: `lider${sequence}@campanha.local`,
+        cpf: String(10000000100 + sequence),
+        phone,
+        phoneNormalized: normalizeDigits(phone),
+        passwordHash: leaderPassword,
+        fullAddress: `Avenida das Liderancas, ${200 + sequence}`,
+        city: index % 5 === 0 ? 'Cidade Vizinha' : 'Cidade Base',
+        neighborhood: ['Zona Norte', 'Centro Expandido', 'Zona Leste', 'Zona Sul', 'Zona Oeste', 'Bela Vista'][index % 6],
+      },
+    })
+
+    const leaderProfile = await prisma.leader.upsert({
+      where: { userId: user.id },
+      update: {
+        supervisorId: assignedSupervisor.id,
+      },
+      create: {
+        userId: user.id,
+        supervisorId: assignedSupervisor.id,
+      },
+    })
+
+    seedLeaders.push({ id: leaderProfile.id, userId: user.id })
+  }
+
+  const demoNames = [
+    'Adriana Lima',
+    'Alexandre Ramos',
+    'Aline Carvalho',
+    'Barbara Martins',
+    'Camila Oliveira',
+    'Cesar Augusto',
+    'Claudia Ferreira',
+    'Daniel Souza',
+    'Debora Alves',
+    'Diego Moreira',
+    'Elaine Cristina',
+    'Fabio Teixeira',
+    'Fatima Lopes',
+    'Felipe Gomes',
+    'Gabriela Cardoso',
+    'Gustavo Ribeiro',
+    'Isabela Correia',
+    'Joao Pedro',
+    'Karen Araujo',
+    'Leandro Rocha',
+    'Leticia Moura',
+    'Luciana Freitas',
+    'Marcelo Dias',
+    'Mariana Campos',
+    'Mateus Santana',
+    'Natalia Barros',
+    'Paulo Henrique',
+    'Priscila Andrade',
+    'Rafael Cunha',
+    'Renata Vieira',
+    'Roberto Machado',
+    'Sandra Regina',
+    'Sergio Henrique',
+    'Simone Matos',
+    'Tatiane Duarte',
+    'Thiago Azevedo',
+    'Valeria Melo',
+    'Vinicius Torres',
+    'Viviane Costa',
+    'Wagner Batista',
+    'Yasmin Fernandes',
+    'Arthur Pereira',
+    'Beatriz Silveira',
+    'Cristiano Leal',
+    'Denise Amaral',
+    'Elias Martins',
+    'Flavia Nascimento',
+    'Hugo Sampaio',
+    'Patricia Reis',
+    'Rodrigo Farias',
+  ]
+
+  const territorySeed = [
+    { city: 'Cidade Base', neighborhood: 'Jardim Central', zone: '101', street: 'Rua das Palmeiras' },
+    { city: 'Cidade Base', neighborhood: 'Centro Expandido', zone: '102', street: 'Rua da Matriz' },
+    { city: 'Cidade Base', neighborhood: 'Zona Leste', zone: '103', street: 'Avenida Horizonte' },
+    { city: 'Cidade Base', neighborhood: 'Zona Sul', zone: '104', street: 'Rua das Acacias' },
+    { city: 'Cidade Base', neighborhood: 'Zona Oeste', zone: '105', street: 'Rua do Bosque' },
+    { city: 'Cidade Vizinha', neighborhood: 'Bela Vista', zone: '106', street: 'Rua Metropolitana' },
+  ]
+
+  const generatedSupporters: SupporterSeed[] = demoNames.map((fullName, index) => {
+    const sequence = index + 1
+    const territory = territorySeed[index % territorySeed.length]
+    const assignedLeader = seedLeaders[index % seedLeaders.length]
+    const phone = `(11) 97777-${String(sequence).padStart(4, '0')}`
+
+    return {
+      fullName,
+      cpf: String(20000000000 + sequence),
+      phone,
+      birthDate: new Date(`${1975 + (index % 28)}-${String((index % 12) + 1).padStart(2, '0')}-${String((index % 27) + 1).padStart(2, '0')}`),
+      postalCode: `07${String(100 + sequence).padStart(3, '0')}-000`,
+      street: territory.street,
+      number: String(40 + sequence),
+      complement: index % 4 === 0 ? 'Casa' : index % 5 === 0 ? 'Apto 12' : null,
+      neighborhood: territory.neighborhood,
+      city: territory.city,
+      state: 'SP',
+      voterRegistration: String(200000000000 + sequence),
+      electoralZone: territory.zone,
+      electoralSection: String(10 + (index % 45)),
+      notes: 'Cadastro demo para apresentacao da operacao em producao.',
+      leaderId: assignedLeader.id,
+      createdByUserId: assignedLeader.userId,
+    }
+  })
+
+  const supportersSeed: SupporterSeed[] = [
     {
       fullName: 'Apoiadora Exemplo',
       cpf: '12345678901',
@@ -217,6 +421,7 @@ async function main() {
       electoralSection: '27',
       notes: 'Base importante para expansao metropolitana.',
     },
+    ...generatedSupporters,
   ]
 
   for (const record of supportersSeed) {
@@ -250,8 +455,8 @@ async function main() {
           consentAccepted: true,
           consentSource: 'WEB_FORM',
           consentAcceptedAt: new Date(),
-          leaderId: leader.id,
-          createdByUserId: leaderUser.id,
+          leaderId: record.leaderId ?? leader.id,
+          createdByUserId: record.createdByUserId ?? leaderUser.id,
         },
       })
 
@@ -262,7 +467,7 @@ async function main() {
           supporterId: supporter.id,
           accepted: true,
           source: 'WEB_FORM',
-          recordedByUserId: leaderUser.id,
+          recordedByUserId: record.createdByUserId ?? leaderUser.id,
           acceptedAt: supporter.consentAcceptedAt,
           ipAddress: '127.0.0.1',
           consentTextVersion: 'v1',

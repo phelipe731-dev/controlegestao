@@ -89,14 +89,10 @@ export function AppShell() {
 
   const Sidebar = () => (
     <aside className="flex h-full flex-col bg-sidebar text-white">
-      {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal font-display text-sm font-bold text-white">
-          CH
-        </div>
+      <div className="flex h-16 shrink-0 items-center border-b border-white/10 px-5">
         <div>
-          <div className="font-display text-sm font-bold leading-none text-white">CampanhaHub</div>
-          <div className="mt-0.5 text-[10px] text-white/40 uppercase tracking-widest">Operação de campo</div>
+          <div className="font-display text-sm font-bold leading-none text-white">Gestão Controle</div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-widest text-white/40">Operação de campo</div>
         </div>
       </div>
 

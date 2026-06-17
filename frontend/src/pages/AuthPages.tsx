@@ -38,13 +38,9 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-mist px-4 py-12">
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal font-display text-lg font-bold text-white">
-            CH
-          </div>
+        <div className="mb-8 text-center">
           <div className="text-center">
-            <div className="font-display text-lg font-bold text-ink">CampanhaHub</div>
+            <div className="font-display text-xl font-bold text-ink">Gestão Controle</div>
             <div className="text-[10px] uppercase tracking-widest text-slate-400">Operação de campo</div>
           </div>
         </div>

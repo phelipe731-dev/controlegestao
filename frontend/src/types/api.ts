@@ -256,6 +256,7 @@ export type TerritoriesOverview = {
     strongholds: number
     expansionZones: number
     totalSupporters: number
+    totalLeaders: number
   }
   zones: TerritoryZone[]
   cityBreakdown: Array<{

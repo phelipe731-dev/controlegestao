@@ -41,15 +41,12 @@ function TerritoryNode({ zone, active, onClick }: { zone: TerritoryZone; active:
     <button
       type="button"
       onClick={onClick}
-      className={`absolute h-28 w-40 rounded-xl border p-4 text-left shadow-card transition hover:-translate-y-1 ${tones[zone.status]} ${active ? 'ring-4 ring-ink/10' : ''}`}
-      style={{
-        left: `${zone.x * 18 + 4}%`,
-        top: `${zone.y * 28 + 2}%`,
-      }}
+      className={`min-h-36 rounded-xl border p-4 text-left shadow-card transition hover:-translate-y-1 ${tones[zone.status]} ${active ? 'ring-4 ring-ink/10' : ''}`}
     >
-      <div className="text-xs uppercase tracking-[0.18em] opacity-70">Zona {zone.zone}</div>
+      <div className="text-xs uppercase tracking-[0.18em] opacity-70">Territorio {zone.zone}</div>
       <div className="mt-1 font-display text-xl font-bold">{zone.label}</div>
-      <div className="mt-3 text-sm">{zone.totalSupporters} apoiadores</div>
+      <div className="mt-3 text-sm">{zone.leadersCount} liderancas</div>
+      <div className="text-sm opacity-80">{zone.totalSupporters} apoiadores</div>
     </button>
   )
 }
@@ -82,10 +79,10 @@ export function TerritoriesPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Zonas monitoradas" value={overview.metrics.totalZones} icon={MapPinned} color="text-teal" bg="bg-teal/10" />
+        <StatCard label="Territorios" value={overview.metrics.totalZones} icon={MapPinned} color="text-teal" bg="bg-teal/10" />
         <StatCard label="Redutos fortes" value={overview.metrics.strongholds} icon={ShieldCheck} color="text-emerald-600" bg="bg-emerald-50" />
         <StatCard label="Expansao prioritaria" value={overview.metrics.expansionZones} icon={TrendingUp} color="text-amber" bg="bg-amber/10" />
-        <StatCard label="Apoiadores mapeados" value={overview.metrics.totalSupporters} icon={Users} color="text-blue-600" bg="bg-blue-50" />
+        <StatCard label="Liderancas mapeadas" value={overview.metrics.totalLeaders} icon={Users} color="text-blue-600" bg="bg-blue-50" />
       </div>
 
       <section>
@@ -114,17 +111,19 @@ export function TerritoriesPage() {
             <MapPinned className="h-3.5 w-3.5" />
             Cartografia operacional
           </div>
-          <h3 className="mt-1 font-display text-base font-bold text-ink">Clique em uma zona</h3>
-          <div className="relative mt-6 h-[520px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+          <h3 className="mt-1 font-display text-base font-bold text-ink">Clique em um territorio</h3>
+          <div className="relative mt-6 max-h-[720px] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="absolute inset-0 bg-[linear-gradient(rgba(16,33,39,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(16,33,39,0.06)_1px,transparent_1px)] bg-[size:52px_52px]" />
-            {overview.zones.map((zone) => (
-              <TerritoryNode
-                key={zone.zone}
-                zone={zone}
-                active={activeZone?.zone === zone.zone}
-                onClick={() => setSelectedZone(zone.zone)}
-              />
-            ))}
+            <div className="relative grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+              {overview.zones.map((zone) => (
+                <TerritoryNode
+                  key={`${zone.zone}-${zone.label}`}
+                  zone={zone}
+                  active={activeZone?.zone === zone.zone}
+                  onClick={() => setSelectedZone(zone.zone)}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -133,11 +132,11 @@ export function TerritoriesPage() {
             <div className="section-label">Detalhe da zona</div>
             <h3 className="mt-1 font-display text-base font-bold text-ink">{activeZone?.label}</h3>
             <div className="mt-4 grid gap-4 text-sm text-slate-600">
-              <div>Zona eleitoral: {activeZone?.zone}</div>
+              <div>Referencia: {activeZone?.zone}</div>
               <div>Cidade: {activeZone?.city}</div>
               <div>Apoiadores: {activeZone?.totalSupporters}</div>
-              <div>Lideres ativos: {activeZone?.leadersCount}</div>
-              <div>Bairros mapeados: {activeZone?.neighborhoodsCount}</div>
+              <div>Liderancas: {activeZone?.leadersCount}</div>
+              <div>Bairros/regioes mapeados: {activeZone?.neighborhoodsCount}</div>
               <div>Status: {activeZone ? activeZone.status : '-'}</div>
             </div>
             <div className="mt-5">
@@ -168,7 +167,7 @@ export function TerritoriesPage() {
                     <div>
                       <div className="font-semibold text-ink">{zone.label}</div>
                       <div className="text-sm text-slate-500">
-                        Zona {zone.zone} • {zone.totalSupporters} apoiadores
+                        {zone.zone} • {zone.leadersCount} liderancas • {zone.totalSupporters} apoiadores
                       </div>
                     </div>
                     <div className="text-xl font-bold text-teal">{zone.strength}%</div>

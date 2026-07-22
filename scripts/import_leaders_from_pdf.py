@@ -149,6 +149,11 @@ def make_email(record: LeaderRecord, index: int, domain: str) -> str:
     return f"{name_slug}-{region_slug}-{index:03d}@{domain}"
 
 
+def make_leader_name(name: str) -> str:
+    name = name.strip()
+    return name if len(name) >= 3 else f"{name} Lideranca"
+
+
 def build_payload(
     record: LeaderRecord,
     index: int,
@@ -157,10 +162,11 @@ def build_payload(
     cpf_prefix: str,
     email_domain: str,
     leader_password: str,
+    leader_status: str,
     supervisor_id: str | None,
 ) -> dict[str, Any]:
     return {
-        "name": record.name,
+        "name": make_leader_name(record.name),
         "cpf": make_cpf(cpf_prefix, index),
         "phone": None,
         "email": make_email(record, index, email_domain),
@@ -168,7 +174,7 @@ def build_payload(
         "city": city,
         "neighborhood": record.region,
         "supervisorId": supervisor_id,
-        "status": "ACTIVE",
+        "status": leader_status,
         "password": leader_password,
     }
 
@@ -188,9 +194,13 @@ def preview(records: list[LeaderRecord], args: argparse.Namespace) -> None:
             cpf_prefix=args.cpf_prefix,
             email_domain=args.email_domain,
             leader_password=args.leader_password,
+            leader_status=args.leader_status,
             supervisor_id=None,
         )
-        print(f"{index:03d}. {payload['name']} | {payload['neighborhood']} | {payload['email']} | CPF tecnico {payload['cpf']}")
+        print(
+            f"{index:03d}. {payload['name']} | {payload['neighborhood']} | "
+            f"{payload['email']} | CPF tecnico {payload['cpf']} | status {payload['status']}"
+        )
     if len(records) > 12:
         print(f"... mais {len(records) - 12} registros")
 
@@ -242,6 +252,7 @@ def import_records(records: list[LeaderRecord], args: argparse.Namespace) -> Non
             cpf_prefix=args.cpf_prefix,
             email_domain=args.email_domain,
             leader_password=args.leader_password,
+            leader_status=args.leader_status,
             supervisor_id=supervisor_id,
         )
         identity_keys = {
@@ -278,6 +289,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--admin-email")
     parser.add_argument("--admin-password")
     parser.add_argument("--leader-password", default="Lider@123")
+    parser.add_argument("--leader-status", choices=["ACTIVE", "INACTIVE"], default="INACTIVE")
     parser.add_argument("--city", default="Sao Vicente")
     parser.add_argument("--email-domain", default="liderancas.local")
     parser.add_argument("--cpf-prefix", default="98")

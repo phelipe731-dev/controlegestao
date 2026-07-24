@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: campanhahub-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 12h
+      - key: DATABASE_URL
+        fromDatabase:
+          name: campanhahub-db
+          property: connectionString
+      - key: RUN_SEED_ON_START
+        value: true
+      - key: SEED_ADMIN_EMAIL
+        value: admin@campanha.local
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: campanhahub-db
+    databaseName: campanha_db
+    user: campanha
+    plan: free

@@ -71,7 +71,7 @@ export function ReportsPage() {
       link.click()
       URL.revokeObjectURL(url)
     } catch (error) {
-      alert(getErrorMessage(error, 'Nao foi possivel exportar o relatorio.'))
+      alert(getErrorMessage(error, 'Não foi possível exportar o relatório.'))
     }
   }
 
@@ -80,8 +80,8 @@ export function ReportsPage() {
       <div className="app-card p-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
-            <div className="section-label">Relatorio filtrado</div>
-            <h2 className="mt-1 font-display text-base font-bold text-ink">Base por lider, territorio e periodo</h2>
+            <div className="section-label">Relatório filtrado</div>
+            <h2 className="mt-1 font-display text-base font-bold text-ink">Base por líder, território e período</h2>
           </div>
           <div className="flex gap-3">
             <button type="button" className="button-secondary" onClick={() => download('csv')}>
@@ -95,7 +95,7 @@ export function ReportsPage() {
 
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           {user?.role !== 'LEADER' ? (
-            <Field label="Lider">
+            <Field label="Líder">
               <SelectInput value={filters.leaderId} onChange={(event) => setFilters((current) => ({ ...current, leaderId: event.target.value }))}>
                 <option value="">Todos</option>
                 {(leaders ?? []).map((leader) => (
@@ -147,7 +147,7 @@ export function ReportsPage() {
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="app-card p-6">
           <div className="border-b border-slate-100 pb-4">
-            <div className="section-label">Resumo por lider</div>
+            <div className="section-label">Resumo por líder</div>
             <h3 className="mt-1 font-display text-base font-bold text-ink">Ranking filtrado</h3>
           </div>
           <div className="mt-1 divide-y divide-slate-100">
@@ -172,7 +172,7 @@ export function ReportsPage() {
             </div>
             <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{data?.total ?? 0} registros</div>
           </div>
-          {isLoading ? <div className="text-slate-600">Gerando relatorio...</div> : null}
+          {isLoading ? <div className="text-slate-600">Gerando relatório...</div> : null}
           {(data?.supporters ?? []).length > 0 ? (
             <div className="overflow-x-auto">
               <table className="crm-table">
@@ -180,7 +180,7 @@ export function ReportsPage() {
                   <tr>
                     <th>Nome</th>
                     <th>Cidade</th>
-                    <th>Lider</th>
+                    <th>Líder</th>
                     <th>Zona</th>
                     <th>Cadastro</th>
                   </tr>

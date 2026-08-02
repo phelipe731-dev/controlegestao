@@ -1,15 +1,31 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { getErrorMessage } from '../lib/errors'
 import { Field, TextInput } from '../components/FormControls'
 
+const securityHighlights = [
+  'Acesso protegido por perfil de usuário',
+  'Cadastros com consentimento LGPD',
+  'Auditoria de acessos e alterações',
+]
+
+function AccessBrand() {
+  return (
+    <div>
+      <div className="font-display text-2xl font-bold tracking-tight text-ink">Gestão Controle</div>
+      <div className="mt-1 text-xs font-semibold uppercase tracking-[0.32em] text-teal">Plataforma operacional</div>
+    </div>
+  )
+}
+
 export function LoginPage() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('admin@campanha.local')
-  const [password, setPassword] = useState('Admin@123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -29,87 +45,104 @@ export function LoginPage() {
     }
   }
 
-  const seeds = [
-    { role: 'Admin', email: 'admin@campanha.local', password: 'Admin@123' },
-    { role: 'Supervisor', email: 'supervisor@campanha.local', password: 'Supervisor@123' },
-    { role: 'Líder', email: 'lider@campanha.local', password: 'Lider@123' },
-  ]
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-mist px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="text-center">
-            <div className="font-display text-xl font-bold text-ink">Gestão Controle</div>
-            <div className="text-[10px] uppercase tracking-widest text-slate-400">Operação de campo</div>
-          </div>
-        </div>
-
-        {/* Card */}
-        <div className="app-card p-8 shadow-card-md">
-          <h2 className="font-display text-xl font-bold text-ink">Entrar</h2>
-          <p className="mt-1 text-sm text-slate-500">Acesse com seu e-mail e senha.</p>
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <Field label="E-mail">
-              <TextInput
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="voce@campanha.local"
-              />
-            </Field>
-            <Field label="Senha">
-              <TextInput
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </Field>
-
-            {error && (
-              <div className="rounded-lg border border-rose/20 bg-rose/5 px-4 py-3 text-sm text-rose">
-                {error}
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-mist px-4 py-10">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(217,119,6,0.12),_transparent_30%)]" />
+      <div className="relative grid w-full max-w-6xl gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="hidden min-h-[620px] flex-col justify-between rounded-[2rem] bg-sidebar p-10 text-white shadow-card-md lg:flex">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs font-semibold text-white/75">
+              <ShieldCheck className="h-4 w-4 text-teal" />
+              Ambiente restrito e auditado
+            </div>
+            <div className="mt-12 max-w-lg">
+              <div className="font-display text-5xl font-bold leading-tight">
+                Controle interno para equipes, lideranças e supervisão.
               </div>
-            )}
-
-            <button type="submit" className="button-primary w-full py-2.5" disabled={submitting}>
-              {submitting ? 'Entrando...' : 'Acessar'}
-            </button>
-          </form>
-
-          <div className="mt-4 text-center text-sm text-slate-500">
-            <Link to="/forgot-password" className="font-semibold text-teal hover:text-teal-dark">
-              Esqueceu a senha?
-            </Link>
+              <p className="mt-5 text-base leading-7 text-white/65">
+                Organize cadastros de campanha, acompanhe a operação territorial e mantenha os acessos sob governança.
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Seeds de teste */}
-        <div className="mt-4 app-card p-4">
-          <div className="section-label mb-3">Contas de teste</div>
-          <div className="space-y-2">
-            {seeds.map((seed) => (
-              <button
-                type="button"
-                key={seed.email}
-                onClick={() => {
-                  setEmail(seed.email)
-                  setPassword(seed.password)
-                }}
-                className="flex w-full items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-left transition hover:border-teal/40 hover:bg-teal/5"
-              >
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-ink">{seed.role}</div>
-                  <div className="truncate font-mono text-[11px] text-slate-500">{seed.email}</div>
-                </div>
-                <div className="ml-3 shrink-0 font-mono text-[11px] text-slate-400">{seed.password}</div>
-              </button>
+          <div className="grid gap-3">
+            {securityHighlights.map((item) => (
+              <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-4 py-3">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-teal" />
+                <span className="text-sm font-medium text-white/80">{item}</span>
+              </div>
             ))}
           </div>
-          <div className="mt-3 text-center text-[11px] text-slate-400">Clique para preencher automaticamente</div>
-        </div>
+        </section>
+
+        <section className="flex items-center">
+          <div className="w-full">
+            <div className="mb-8 text-center lg:text-left">
+              <AccessBrand />
+              <p className="mt-4 text-sm leading-6 text-slate-500">
+                Use as credenciais fornecidas pelo administrador da operação.
+              </p>
+            </div>
+
+            <div className="app-card p-6 shadow-card-md sm:p-8">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-teal">
+                  <LockKeyhole className="h-6 w-6" />
+                </div>
+                <div>
+                  <h1 className="font-display text-2xl font-bold text-ink">Acessar plataforma</h1>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-500">
+                    Informe seu e-mail profissional e senha para iniciar uma sessão segura.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+                <Field label="E-mail">
+                  <TextInput
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    autoComplete="email"
+                    required
+                  />
+                </Field>
+                <Field label="Senha">
+                  <TextInput
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Digite sua senha"
+                    autoComplete="current-password"
+                    required
+                  />
+                </Field>
+
+                {error && (
+                  <div className="rounded-lg border border-rose/20 bg-rose/5 px-4 py-3 text-sm text-rose">
+                    {error}
+                  </div>
+                )}
+
+                <button type="submit" className="button-primary w-full py-3" disabled={submitting}>
+                  {submitting ? 'Validando acesso...' : 'Entrar com segurança'}
+                </button>
+              </form>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 text-sm">
+                <span className="text-slate-500">Problemas com o acesso?</span>
+                <Link to="/forgot-password" className="font-semibold text-teal hover:text-teal-dark">
+                  Recuperar senha
+                </Link>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 text-xs leading-5 text-slate-500">
+              O uso desta plataforma é restrito a usuários autorizados. Ações realizadas no sistema podem ser registradas para auditoria e segurança.
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   )
@@ -129,7 +162,7 @@ export function ForgotPasswordPage() {
     setRequestMessage(null)
     try {
       const { data } = await api.post<{ message: string; resetToken?: string }>('/auth/forgot-password', { email })
-      setRequestMessage(data.resetToken ? `${data.message} Token dev: ${data.resetToken}` : data.message)
+      setRequestMessage(data.message)
     } catch (e) {
       setError(getErrorMessage(e, 'Não foi possível gerar o token.'))
     }
@@ -158,17 +191,31 @@ export function ForgotPasswordPage() {
           </Link>
         </div>
 
+        <div className="mb-6">
+          <AccessBrand />
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+            Solicite a redefinição e conclua o processo com o token autorizado pela administração da plataforma.
+          </p>
+        </div>
+
         <div className="grid gap-5 md:grid-cols-2">
           <div className="app-card p-6 shadow-card-md">
-            <h1 className="font-display text-xl font-bold text-ink">Gerar token de redefinição</h1>
+            <h1 className="font-display text-xl font-bold text-ink">Solicitar redefinição</h1>
             <p className="mt-1.5 text-sm text-slate-500">
-              Em ambiente local, o token aparece diretamente na resposta.
+              Se o e-mail estiver ativo, uma solicitação segura será registrada para redefinição de senha.
             </p>
             <form onSubmit={handleRequestToken} className="mt-6 space-y-4">
               <Field label="E-mail">
-                <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@campanha.local" />
+                <TextInput
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  autoComplete="email"
+                  required
+                />
               </Field>
-              <button type="submit" className="button-primary">Gerar token</button>
+              <button type="submit" className="button-primary">Solicitar acesso</button>
             </form>
             {requestMessage && (
               <div className="mt-4 rounded-lg border border-teal/20 bg-teal/5 px-4 py-3 text-sm text-teal-dark">
@@ -179,13 +226,20 @@ export function ForgotPasswordPage() {
 
           <div className="app-card p-6 shadow-card-md">
             <h2 className="font-display text-xl font-bold text-ink">Concluir redefinição</h2>
-            <p className="mt-1.5 text-sm text-slate-500">Cole o token recebido e defina a nova senha.</p>
+            <p className="mt-1.5 text-sm text-slate-500">Cole o token autorizado e defina uma nova senha de acesso.</p>
             <form onSubmit={handleResetPassword} className="mt-6 space-y-4">
               <Field label="Token">
-                <TextInput value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder="Cole o token aqui" />
+                <TextInput value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder="Cole o token autorizado" required />
               </Field>
               <Field label="Nova senha">
-                <TextInput type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" />
+                <TextInput
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo de 8 caracteres"
+                  autoComplete="new-password"
+                  required
+                />
               </Field>
               <button type="submit" className="button-primary">Atualizar senha</button>
             </form>

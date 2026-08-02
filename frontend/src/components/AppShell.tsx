@@ -39,7 +39,7 @@ export function AppShell() {
     {
       label: 'Principal',
       items: [
-        { to: '/', label: 'Dashboard', icon: BarChart3, visible: true },
+        { to: '/', label: 'Painel', icon: BarChart3, visible: true },
         { to: '/supporters', label: 'Apoiadores', icon: Vote, visible: true },
         { to: '/communications', label: 'Comunicação', icon: MessageSquareShare, visible: true },
         { to: '/events', label: 'Eventos', icon: CalendarRange, visible: true },
@@ -64,11 +64,11 @@ export function AppShell() {
   ]
 
   const pageTitles: Record<string, { title: string; subtitle: string }> = {
-    '/': { title: 'Dashboard', subtitle: 'Visão geral da operação de campo' },
-    '/supporters': { title: 'Apoiadores', subtitle: 'Gestão da base territorial' },
+    '/': { title: 'Painel', subtitle: 'Visão geral da operação' },
+    '/supporters': { title: 'Apoiadores', subtitle: 'Cadastro e acompanhamento da base' },
     '/communications': { title: 'Comunicação', subtitle: 'Central de mensagens e notificações' },
     '/events': { title: 'Eventos', subtitle: 'Agenda e mobilização' },
-    '/territories': { title: 'Territórios', subtitle: 'Mapa territorial' },
+    '/territories': { title: 'Territórios', subtitle: 'Distribuição por bairro, cidade e região' },
     '/leaders': { title: 'Líderes', subtitle: 'Rede de lideranças' },
     '/supervisors': { title: 'Supervisores', subtitle: 'Supervisão regional' },
     '/reports': { title: 'Relatórios', subtitle: 'Exportações e análises' },
@@ -92,7 +92,7 @@ export function AppShell() {
       <div className="flex h-16 shrink-0 items-center border-b border-white/10 px-5">
         <div>
           <div className="font-display text-sm font-bold leading-none text-white">Gestão Controle</div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-widest text-white/40">Operação de campo</div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-widest text-white/40">Gestão interna</div>
         </div>
       </div>
 
@@ -206,7 +206,7 @@ export function AppShell() {
           </div>
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden rounded-full border border-teal/30 bg-teal/10 px-3 py-1 text-xs font-medium text-teal sm:block">
-              LGPD ativa
+              LGPD e auditoria ativas
             </span>
           </div>
         </header>

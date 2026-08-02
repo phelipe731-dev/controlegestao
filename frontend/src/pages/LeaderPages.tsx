@@ -56,7 +56,7 @@ export function LeaderListPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['leaders'] })
-      alert('Lider removido com sucesso.')
+      alert('Líder removido com sucesso.')
     },
     onError: (error) => {
       alert(getErrorMessage(error))
@@ -143,7 +143,7 @@ export function LeaderListPage() {
                             title="Excluir"
                             className="button-ghost px-2.5 py-1.5 text-rose hover:bg-rose/10 hover:text-rose"
                             onClick={() => {
-                              if (window.confirm(`Excluir o lider ${leader.name}?`)) {
+                              if (window.confirm(`Excluir o líder ${leader.name}?`)) {
                                 deleteMutation.mutate(leader.id)
                               }
                             }}
@@ -235,7 +235,7 @@ export function LeaderFormPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['leaders'] })
-      alert(`Lider ${isEdit ? 'atualizado' : 'criado'} com sucesso.`)
+      alert(`Líder ${isEdit ? 'atualizado' : 'criado'} com sucesso.`)
       navigate('/leaders')
     },
     onError: (error) => {
@@ -244,7 +244,7 @@ export function LeaderFormPage() {
   })
 
   if (!canManage) {
-    return <div className="app-card p-6 text-slate-600">Seu perfil nao possui permissao para cadastrar ou editar lideres.</div>
+    return <div className="app-card p-6 text-slate-600">Seu perfil não possui permissão para cadastrar ou editar líderes.</div>
   }
 
   if (isLoading) {

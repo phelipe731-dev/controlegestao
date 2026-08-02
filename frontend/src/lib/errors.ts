@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export function getErrorMessage(error: unknown, fallback = 'Nao foi possivel concluir a operacao.') {
+export function getErrorMessage(error: unknown, fallback = 'Não foi possível concluir a operação.') {
   if (axios.isAxiosError(error)) {
     return (error.response?.data as { message?: string } | undefined)?.message ?? fallback
   }

@@ -7,6 +7,12 @@ import { getErrorMessage } from '../lib/errors'
 import { formatDate, formatDateTime, statusLabel } from '../lib/format'
 import type { EventsOverview } from '../types/api'
 
+function getTodayInputValue() {
+  const today = new Date()
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset())
+  return today.toISOString().slice(0, 10)
+}
+
 function StatCard({
   label,
   value,
@@ -33,10 +39,22 @@ function StatCard({
   )
 }
 
-function JuneCalendar({ events }: { events: EventsOverview['events'] }) {
-  const days = Array.from({ length: 30 }, (_, index) => index + 1)
-  const eventMap = new Map(events.map((event) => [new Date(event.eventDate).getDate(), event]))
-  const leadingEmptyDays = new Date('2026-06-01T00:00:00').getDay()
+function EventCalendar({ events, monthDate }: { events: EventsOverview['events']; monthDate: Date }) {
+  const year = monthDate.getFullYear()
+  const month = monthDate.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const days = Array.from({ length: daysInMonth }, (_, index) => index + 1)
+  const leadingEmptyDays = new Date(year, month, 1).getDay()
+  const eventMap = new Map<number, EventsOverview['events']>()
+
+  events.forEach((event) => {
+    const eventDate = new Date(event.eventDate)
+    if (eventDate.getFullYear() !== year || eventDate.getMonth() !== month) return
+
+    const dayEvents = eventMap.get(eventDate.getDate()) ?? []
+    dayEvents.push(event)
+    eventMap.set(eventDate.getDate(), dayEvents)
+  })
 
   return (
     <div className="grid grid-cols-7 gap-3">
@@ -49,17 +67,21 @@ function JuneCalendar({ events }: { events: EventsOverview['events'] }) {
         <div key={`empty-${index}`} className="min-h-28 rounded-lg border border-transparent" />
       ))}
       {days.map((day) => {
-        const event = eventMap.get(day)
+        const dayEvents = eventMap.get(day) ?? []
         return (
-          <div key={day} className={`min-h-28 rounded-lg border p-3 ${event ? 'border-amber/30 bg-amber/5' : 'border-slate-100 bg-slate-50'}`}>
+          <div key={day} className={`min-h-28 rounded-lg border p-3 ${dayEvents.length > 0 ? 'border-amber/30 bg-amber/5' : 'border-slate-100 bg-slate-50'}`}>
             <div className="text-sm font-semibold text-ink">{day}</div>
-            {event ? (
-              <div className="mt-2">
-                <div className="text-sm font-semibold text-ink">{event.title}</div>
-                <div className="mt-1 text-xs text-slate-500">{event.startTimeLabel} - {event.endTimeLabel}</div>
-                <div className="mt-2 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-amber">
-                  {statusLabel(event.status)}
-                </div>
+            {dayEvents.length > 0 ? (
+              <div className="mt-2 space-y-2">
+                {dayEvents.slice(0, 2).map((event) => (
+                  <div key={event.id} className="rounded-lg bg-white/80 p-2">
+                    <div className="line-clamp-2 text-xs font-semibold text-ink">{event.title}</div>
+                    <div className="mt-1 text-[11px] text-slate-500">{event.startTimeLabel} - {event.endTimeLabel}</div>
+                  </div>
+                ))}
+                {dayEvents.length > 2 ? (
+                  <div className="text-[11px] font-semibold text-amber">+{dayEvents.length - 2} evento(s)</div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -71,14 +93,15 @@ function JuneCalendar({ events }: { events: EventsOverview['events'] }) {
 
 export function EventsPage() {
   const queryClient = useQueryClient()
+  const todayInputValue = getTodayInputValue()
   const [form, setForm] = useState({
     title: '',
     description: '',
-    eventDate: '2026-06-30',
+    eventDate: todayInputValue,
     startTimeLabel: '19:00',
     endTimeLabel: '21:00',
     location: '',
-    city: 'Cidade Base',
+    city: '',
     neighborhood: '',
     electoralZone: '',
     capacity: 150,
@@ -103,11 +126,11 @@ export function EventsPage() {
       setForm({
         title: '',
         description: '',
-        eventDate: '2026-06-30',
+        eventDate: getTodayInputValue(),
         startTimeLabel: '19:00',
         endTimeLabel: '21:00',
         location: '',
-        city: 'Cidade Base',
+        city: '',
         neighborhood: '',
         electoralZone: '',
         capacity: 150,
@@ -122,6 +145,14 @@ export function EventsPage() {
 
   const overview = eventsQuery.data
   const upcoming = useMemo(() => overview?.events ?? [], [overview])
+  const calendarMonthDate = useMemo(() => {
+    const firstEventDate = upcoming[0]?.eventDate
+    return firstEventDate ? new Date(firstEventDate) : new Date()
+  }, [upcoming])
+  const calendarMonthLabel = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(calendarMonthDate)
 
   if (!overview) {
     return <div className="app-card p-8 text-slate-600">Carregando agenda...</div>
@@ -131,7 +162,7 @@ export function EventsPage() {
     <div className="space-y-6">
       <div>
         <div className="section-label">Agenda operacional</div>
-        <h2 className="page-title mt-1">Eventos, ocupacao e notificacao da base</h2>
+        <h2 className="page-title mt-1">Eventos, ocupação e notificação da base</h2>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -147,9 +178,9 @@ export function EventsPage() {
             <Plus className="h-3.5 w-3.5" />
             Novo evento
           </div>
-          <h3 className="mt-1 font-display text-base font-bold text-ink">Adicionar agenda de junho/2026</h3>
+          <h3 className="mt-1 font-display text-base font-bold text-ink">Adicionar agenda operacional</h3>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <Field label="Titulo">
+            <Field label="Título">
               <TextInput value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} />
             </Field>
             <Field label="Data">
@@ -177,25 +208,25 @@ export function EventsPage() {
               <SelectInput value={form.format} onChange={(event) => setForm((current) => ({ ...current, format: event.target.value }))}>
                 <option value="PRESENTIAL">Presencial</option>
                 <option value="ONLINE">Online</option>
-                <option value="HYBRID">Hibrido</option>
+                <option value="HYBRID">Híbrido</option>
               </SelectInput>
             </Field>
             <Field label="Status">
               <SelectInput value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}>
                 <option value="DRAFT">Rascunho</option>
                 <option value="CONFIRMED">Confirmado</option>
-                <option value="COMPLETED">Concluido</option>
+                <option value="COMPLETED">Concluído</option>
                 <option value="CANCELLED">Cancelado</option>
               </SelectInput>
             </Field>
             <Field label="Capacidade">
               <TextInput type="number" value={String(form.capacity)} onChange={(event) => setForm((current) => ({ ...current, capacity: Number(event.target.value) }))} />
             </Field>
-            <Field label="Publico esperado">
+            <Field label="Público esperado">
               <TextInput type="number" value={String(form.expectedAudience)} onChange={(event) => setForm((current) => ({ ...current, expectedAudience: Number(event.target.value) }))} />
             </Field>
             <div className="md:col-span-2">
-              <Field label="Descricao">
+              <Field label="Descrição">
                 <TextAreaInput value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
               </Field>
             </div>
@@ -214,11 +245,11 @@ export function EventsPage() {
         <div className="app-card p-6">
           <div className="flex items-center gap-2 section-label">
             <CalendarDays className="h-3.5 w-3.5" />
-            Calendario de junho/2026
+            Calendário mensal
           </div>
-          <h3 className="mt-1 font-display text-base font-bold text-ink">Vista mensal</h3>
+          <h3 className="mt-1 font-display text-base font-bold text-ink capitalize">{calendarMonthLabel}</h3>
           <div className="mt-5">
-            <JuneCalendar events={upcoming} />
+            <EventCalendar events={upcoming} monthDate={calendarMonthDate} />
           </div>
         </div>
 
@@ -248,7 +279,7 @@ export function EventsPage() {
                 </div>
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between text-sm text-slate-500">
-                    <span>Ocupacao</span>
+                    <span>Ocupação</span>
                     <span>{event.occupancyRate}%</span>
                   </div>
                   <div className="h-3 rounded-full bg-slate-200">

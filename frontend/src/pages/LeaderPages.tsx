@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Plus, Pencil, Trash2, Users } from 'lucide-react'
+import { Plus, Pencil, Search, SlidersHorizontal, Trash2, Users } from 'lucide-react'
 import { Field, SelectInput, TextInput } from '../components/FormControls'
 import { StatusPill } from '../components/StatusPill'
 import { useAuth } from '../context/AuthContext'
@@ -24,6 +24,14 @@ type LeaderFormValues = {
   password: string
 }
 
+type LeaderFilters = {
+  search: string
+  supervisorId: string
+  city: string
+  neighborhood: string
+  status: string
+}
+
 const initialValues: LeaderFormValues = {
   name: '',
   cpf: '',
@@ -40,12 +48,32 @@ const initialValues: LeaderFormValues = {
 export function LeaderListPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<LeaderFilters>({
+    search: '',
+    supervisorId: '',
+    city: '',
+    neighborhood: '',
+    status: '',
+  })
   const canManage = user?.role === 'ADMIN' || (user?.role === 'SUPERVISOR' && user.canCreateLeaders)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['leaders'],
+  const { data: supervisors } = useQuery({
+    queryKey: ['supervisors-leader-filters'],
     queryFn: async () => {
-      const response = await api.get<{ leaders: Leader[] }>('/leaders')
+      const response = await api.get<{ supervisors: Supervisor[] }>('/supervisors')
+      return response.data.supervisors
+    },
+    enabled: user?.role === 'ADMIN',
+  })
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['leaders', filters],
+    queryFn: async () => {
+      const filledFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, value]) => value.trim() !== ''),
+      )
+      const response = await api.get<{ leaders: Leader[] }>('/leaders', { params: filledFilters })
       return response.data.leaders
     },
   })
@@ -64,15 +92,44 @@ export function LeaderListPage() {
   })
 
   const leaders = data ?? []
+  const activeFilters = Object.values(filters).filter(Boolean).length
+  const updateFilters = (updater: (current: LeaderFilters) => LeaderFilters) => {
+    setFilters(updater)
+  }
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div>
+        <div className="min-w-52">
           <div className="section-label">Controle de lideranças</div>
           <h2 className="page-title mt-1">Lista de líderes</h2>
         </div>
+
+        <div className="relative min-w-64 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            className="field-base pl-9"
+            placeholder="Buscar por nome, e-mail, CPF, telefone ou supervisor..."
+            value={filters.search}
+            onChange={(event) => updateFilters((current) => ({ ...current, search: event.target.value }))}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowFilters((current) => !current)}
+          className={`button-secondary relative ${showFilters ? 'border-teal text-teal' : ''}`}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Filtros
+          {activeFilters > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal text-[10px] font-bold text-white">
+              {activeFilters}
+            </span>
+          )}
+        </button>
+
         {canManage ? (
           <Link to="/leaders/new" className="button-primary ml-auto">
             <Plus className="h-4 w-4" />
@@ -80,6 +137,63 @@ export function LeaderListPage() {
           </Link>
         ) : null}
       </div>
+
+      {showFilters && (
+        <div className="app-card p-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {user?.role === 'ADMIN' && (
+              <Field label="Supervisor">
+                <SelectInput
+                  value={filters.supervisorId}
+                  onChange={(event) => updateFilters((current) => ({ ...current, supervisorId: event.target.value }))}
+                >
+                  <option value="">Todos</option>
+                  {(supervisors ?? []).map((supervisor) => (
+                    <option key={supervisor.id} value={supervisor.id}>
+                      {supervisor.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              </Field>
+            )}
+            <Field label="Cidade">
+              <TextInput
+                value={filters.city}
+                onChange={(event) => updateFilters((current) => ({ ...current, city: event.target.value }))}
+                placeholder="Ex: Santos"
+              />
+            </Field>
+            <Field label="Bairro">
+              <TextInput
+                value={filters.neighborhood}
+                onChange={(event) => updateFilters((current) => ({ ...current, neighborhood: event.target.value }))}
+                placeholder="Ex: Centro"
+              />
+            </Field>
+            <Field label="Status">
+              <SelectInput
+                value={filters.status}
+                onChange={(event) => updateFilters((current) => ({ ...current, status: event.target.value }))}
+              >
+                <option value="">Todos</option>
+                <option value="ACTIVE">Ativo</option>
+                <option value="INACTIVE">Inativo</option>
+              </SelectInput>
+            </Field>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              className="button-ghost text-xs"
+              onClick={() => {
+                setFilters({ search: '', supervisorId: '', city: '', neighborhood: '', status: '' })
+              }}
+            >
+              Limpar filtros
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="app-card overflow-hidden">
@@ -98,8 +212,12 @@ export function LeaderListPage() {
         {!isLoading && leaders.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Users className="mb-3 h-10 w-10 text-slate-300" />
-            <div className="text-sm font-medium text-slate-500">Nenhum líder cadastrado</div>
-            <div className="mt-1 text-xs text-slate-400">Cadastre um novo líder para começar.</div>
+            <div className="text-sm font-medium text-slate-500">
+              {activeFilters > 0 ? 'Nenhum líder encontrado' : 'Nenhum líder cadastrado'}
+            </div>
+            <div className="mt-1 text-xs text-slate-400">
+              {activeFilters > 0 ? 'Tente ajustar a busca ou limpar os filtros.' : 'Cadastre um novo líder para começar.'}
+            </div>
           </div>
         )}
 

@@ -7,6 +7,7 @@ import { asyncHandler } from '../utils/async-handler.js'
 import { writeAuditLog } from '../utils/audit.js'
 import { ensureUniqueUserFields } from '../utils/conflicts.js'
 import { HttpError } from '../utils/http-error.js'
+import { buildLeaderWhere } from '../utils/leader-filters.js'
 import { leaderScope } from '../utils/scopes.js'
 import { leaderListInclude, serializeLeader } from '../utils/serializers.js'
 import { normalizeEmail, normalizeOptionalDigits, normalizeText } from '../utils/normalizers.js'
@@ -16,6 +17,16 @@ export const leadersRouter = Router()
 leadersRouter.use(authenticate)
 
 const statusSchema = z.enum(['ACTIVE', 'INACTIVE'])
+const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
+const optionalQueryString = z.preprocess(emptyToUndefined, z.string().optional())
+
+const leaderQuerySchema = z.object({
+  search: optionalQueryString,
+  supervisorId: optionalQueryString,
+  city: optionalQueryString,
+  neighborhood: optionalQueryString,
+  status: z.preprocess(emptyToUndefined, statusSchema.optional()),
+})
 
 const leaderCreateSchema = z.object({
   name: z.string().min(3),
@@ -51,8 +62,10 @@ leadersRouter.get(
   authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
   asyncHandler(async (request, response) => {
     const user = request.user!
+    const filters = leaderQuerySchema.parse(request.query)
+    const where = buildLeaderWhere(user, filters)
     const leaders = await prisma.leader.findMany({
-      where: leaderScope(user),
+      where,
       include: leaderListInclude,
       orderBy: {
         createdAt: 'desc',

@@ -246,6 +246,11 @@ export type TerritoryZone = {
   totalSupporters: number
   strength: number
   leadersCount: number
+  leaderNames: string[]
+  leaders: Array<{
+    name: string
+    phone: string | null
+  }>
   neighborhoodsCount: number
   status: 'forte' | 'atencao' | 'expansao'
 }

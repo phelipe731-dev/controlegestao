@@ -43,7 +43,7 @@ export function AppShell() {
         { to: '/supporters', label: 'Apoiadores', icon: Vote, visible: true },
         { to: '/communications', label: 'Comunicação', icon: MessageSquareShare, visible: true },
         { to: '/events', label: 'Eventos', icon: CalendarRange, visible: true },
-        { to: '/territories', label: 'Territórios', icon: Map, visible: true },
+        { to: '/territories', label: 'Bairros', icon: Map, visible: true },
       ],
     },
     {
@@ -68,7 +68,7 @@ export function AppShell() {
     '/supporters': { title: 'Apoiadores', subtitle: 'Cadastro e acompanhamento da base' },
     '/communications': { title: 'Comunicação', subtitle: 'Central de mensagens e notificações' },
     '/events': { title: 'Eventos', subtitle: 'Agenda e mobilização' },
-    '/territories': { title: 'Territórios', subtitle: 'Distribuição por bairro, cidade e região' },
+    '/territories': { title: 'Bairros', subtitle: 'Distribuição por bairro, cidade e região' },
     '/leaders': { title: 'Líderes', subtitle: 'Rede de lideranças' },
     '/supervisors': { title: 'Supervisores', subtitle: 'Supervisão regional' },
     '/reports': { title: 'Relatórios', subtitle: 'Exportações e análises' },

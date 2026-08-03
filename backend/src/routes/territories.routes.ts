@@ -41,7 +41,7 @@ territoriesRouter.get(
         city: string
         label: string
         totalSupporters: number
-        leaders: Set<string>
+        leaders: Map<string, { name: string; phone: string | null }>
         neighborhoods: Set<string>
         electoralZones: Set<string>
       }
@@ -53,13 +53,16 @@ territoriesRouter.get(
         city: supporter.city,
         label: supporter.neighborhood,
         totalSupporters: 0,
-        leaders: new Set<string>(),
+        leaders: new Map<string, { name: string; phone: string | null }>(),
         neighborhoods: new Set<string>(),
         electoralZones: new Set<string>(),
       }
 
       entry.totalSupporters += 1
-      entry.leaders.add(supporter.leader.user.name)
+      entry.leaders.set(supporter.leaderId, {
+        name: supporter.leader.user.name,
+        phone: supporter.leader.user.phone,
+      })
       entry.neighborhoods.add(supporter.neighborhood)
       entry.electoralZones.add(supporter.electoralZone)
       byTerritory.set(key, entry)
@@ -71,12 +74,15 @@ territoriesRouter.get(
         city: leader.user.city ?? 'Nao informado',
         label: leader.user.neighborhood ?? 'Nao informado',
         totalSupporters: 0,
-        leaders: new Set<string>(),
+        leaders: new Map<string, { name: string; phone: string | null }>(),
         neighborhoods: new Set<string>(),
         electoralZones: new Set<string>(),
       }
 
-      entry.leaders.add(leader.user.name)
+      entry.leaders.set(leader.id, {
+        name: leader.user.name,
+        phone: leader.user.phone,
+      })
       if (leader.user.neighborhood) {
         entry.neighborhoods.add(leader.user.neighborhood)
       }
@@ -102,6 +108,10 @@ territoriesRouter.get(
         totalSupporters: territory.totalSupporters,
         strength,
         leadersCount: territory.leaders.size,
+        leaderNames: Array.from(territory.leaders.values())
+          .map((leader) => leader.name)
+          .sort((left, right) => left.localeCompare(right)),
+        leaders: Array.from(territory.leaders.values()).sort((left, right) => left.name.localeCompare(right.name)),
         neighborhoodsCount: territory.neighborhoods.size,
         status: strength >= 70 ? 'forte' : strength >= 35 ? 'atencao' : 'expansao',
       }

@@ -3,6 +3,7 @@ import {
   CalendarRange,
   MessageSquareShare,
   FileText,
+  Handshake,
   LogOut,
   Menu,
   Map,
@@ -41,6 +42,7 @@ export function AppShell() {
       items: [
         { to: '/', label: 'Painel', icon: BarChart3, visible: true },
         { to: '/supporters', label: 'Apoiadores', icon: Vote, visible: true },
+        { to: '/dobrada-paulo-alexandre', label: 'Dobrada Paulo Alexandre', icon: Handshake, visible: user?.role !== 'LEADER' },
         { to: '/communications', label: 'Comunicação', icon: MessageSquareShare, visible: true },
         { to: '/events', label: 'Eventos', icon: CalendarRange, visible: true },
         { to: '/territories', label: 'Bairros', icon: Map, visible: true },
@@ -66,6 +68,7 @@ export function AppShell() {
   const pageTitles: Record<string, { title: string; subtitle: string }> = {
     '/': { title: 'Painel', subtitle: 'Visão geral da operação' },
     '/supporters': { title: 'Apoiadores', subtitle: 'Cadastro e acompanhamento da base' },
+    '/dobrada-paulo-alexandre': { title: 'Dobrada Paulo Alexandre', subtitle: 'Lideranças vinculadas à dobrada' },
     '/communications': { title: 'Comunicação', subtitle: 'Central de mensagens e notificações' },
     '/events': { title: 'Eventos', subtitle: 'Agenda e mobilização' },
     '/territories': { title: 'Bairros', subtitle: 'Distribuição por bairro, cidade e região' },

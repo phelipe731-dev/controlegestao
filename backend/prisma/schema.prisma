@@ -131,6 +131,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   campaigns           CommunicationCampaign[] @relation("CampaignCreator")
   events              CampaignEvent[]      @relation("EventCreator")
+  createdDobradaPauloAlexandreLeaders DobradaPauloAlexandreLeader[] @relation("DobradaPauloAlexandreLeaderCreator")
+  updatedDobradaPauloAlexandreLeaders DobradaPauloAlexandreLeader[] @relation("DobradaPauloAlexandreLeaderUpdater")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -161,6 +163,33 @@ model Leader {
   updatedAt    DateTime    @updatedAt
 
   @@index([supervisorId])
+}
+
+model DobradaPauloAlexandreLeader {
+  id              String     @id @default(cuid())
+  fullName        String
+  cpf             String?
+  phone           String?
+  phoneNormalized String?
+  email           String?
+  fullAddress     String?
+  city            String?
+  neighborhood    String?
+  source          String?
+  notes           String?
+  status          UserStatus @default(ACTIVE)
+  createdByUserId String?
+  createdByUser   User?      @relation("DobradaPauloAlexandreLeaderCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUserId String?
+  updatedByUser   User?      @relation("DobradaPauloAlexandreLeaderUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([fullName])
+  @@index([city])
+  @@index([neighborhood])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Supporter {

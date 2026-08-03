@@ -8,6 +8,7 @@ import { notFoundHandler } from './middleware/not-found.js'
 import { accountRouter } from './routes/account.routes.js'
 import { authRouter } from './routes/auth.routes.js'
 import { dashboardRouter } from './routes/dashboard.routes.js'
+import { dobradaPauloAlexandreRouter } from './routes/dobrada-paulo-alexandre.routes.js'
 import { eventsRouter } from './routes/events.routes.js'
 import { leadersRouter } from './routes/leaders.routes.js'
 import { communicationsRouter } from './routes/communications.routes.js'
@@ -40,6 +41,7 @@ app.get('/health', (_request, response) => {
 
 app.use('/api/auth', authRouter)
 app.use('/api/dashboard', dashboardRouter)
+app.use('/api/dobrada-paulo-alexandre', dobradaPauloAlexandreRouter)
 app.use('/api/communications', communicationsRouter)
 app.use('/api/events', eventsRouter)
 app.use('/api/leaders', leadersRouter)

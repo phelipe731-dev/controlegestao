@@ -62,6 +62,24 @@ export type Supervisor = {
   updatedAt: string
 }
 
+export type DobradaPauloAlexandreLeader = {
+  id: string
+  fullName: string
+  cpf: string | null
+  phone: string | null
+  email: string | null
+  fullAddress: string | null
+  city: string | null
+  neighborhood: string | null
+  source: string | null
+  notes: string | null
+  status: UserStatus
+  createdByUserName: string | null
+  updatedByUserName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type Supporter = {
   id: string
   fullName: string

@@ -283,6 +283,16 @@ export type CabinetDemandHistoryItem = {
   createdAt: string
 }
 
+export type CabinetDemandAttachment = {
+  id: string
+  demandId: string
+  originalName: string
+  mimeType: string
+  sizeBytes: number
+  uploadedByUserName: string
+  createdAt: string
+}
+
 export type CabinetDemand = {
   id: string
   title: string
@@ -301,6 +311,7 @@ export type CabinetDemand = {
   createdAt: string
   updatedAt: string
   history: CabinetDemandHistoryItem[]
+  attachments: CabinetDemandAttachment[]
 }
 
 export type DemandsResponse = {

@@ -27,8 +27,11 @@ services:
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@campanha.local}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin@123}
       RUN_SEED_ON_START: ${RUN_SEED_ON_START:-false}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
     ports:
       - 127.0.0.1:${API_PORT:-3333}:3333
+    volumes:
+      - uploads_data:/app/uploads
 
   frontend:
     build:
@@ -44,3 +47,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

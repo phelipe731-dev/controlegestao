@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Download,
   Edit3,
   FileUp,
   Loader2,
@@ -23,7 +25,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { getErrorMessage } from '../lib/errors'
 import { formatDate, formatDateTime } from '../lib/format'
-import type { CabinetDemand, CabinetDemandHistoryItem, DemandResponsibleUser, DemandStatus, DemandsResponse } from '../types/api'
+import type { CabinetDemand, CabinetDemandAttachment, CabinetDemandHistoryItem, DemandResponsibleUser, DemandStatus, DemandsResponse } from '../types/api'
 
 type DemandFormValues = {
   title: string
@@ -166,6 +168,12 @@ function isOverdue(demand: CabinetDemand) {
   if (demand.status === 'RESOLVED') return false
   const ageMs = Date.now() - new Date(demand.createdAt).getTime()
   return ageMs > 1000 * 60 * 60 * 24 * 7
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 function mapToPayload(form: DemandFormValues) {
@@ -588,19 +596,91 @@ function DemandHistoryTimeline({
   )
 }
 
-function DemandAttachments() {
+function DemandAttachments({
+  demand,
+  uploading,
+  deletingId,
+  downloadingId,
+  onUpload,
+  onDownload,
+  onDelete,
+}: {
+  demand: CabinetDemand
+  uploading: boolean
+  deletingId: string | null
+  downloadingId: string | null
+  onUpload: (file: File) => void
+  onDownload: (attachment: CabinetDemandAttachment) => void
+  onDelete: (attachment: CabinetDemandAttachment) => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachments = demand.attachments ?? []
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      alert('O arquivo deve ter no máximo 10 MB.')
+      return
+    }
+    onUpload(file)
+  }
+
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-        <FileUp className="mx-auto h-8 w-8 text-slate-300" />
-        <div className="mt-3 font-semibold text-ink">Anexos preparados para a próxima etapa</div>
-        <p className="mt-1 text-sm text-slate-500">
-          O backend atual ainda não possui endpoint de upload. A área visual foi preparada sem alterar a API existente.
-        </p>
+      <div className="rounded-xl border border-dashed border-teal/30 bg-teal/5 p-5">
+        <input ref={fileInputRef} className="hidden" type="file" onChange={handleFileChange} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 font-semibold text-ink">
+              <FileUp className="h-5 w-5 text-teal" />
+              Anexar documento
+            </div>
+            <p className="mt-1 text-sm text-slate-500">Envie fotos, PDFs ou documentos da solicitação. Limite de 10 MB por arquivo.</p>
+          </div>
+          <button type="button" className="button-primary" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            {uploading ? 'Enviando...' : 'Escolher arquivo'}
+          </button>
+        </div>
       </div>
-      <div className="rounded-lg border border-slate-100 bg-white p-3 text-sm text-slate-500">
-        Nome, tamanho, tipo, data e usuário serão exibidos aqui quando o armazenamento de anexos for habilitado.
-      </div>
+
+      {attachments.length === 0 ? (
+        <div className="rounded-lg border border-slate-100 bg-white p-4 text-sm text-slate-500">
+          Nenhum anexo registrado nesta demanda ainda.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {attachments.map((attachment) => (
+            <div key={attachment.id} className="rounded-xl border border-slate-100 bg-white p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-ink">{attachment.originalName}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {formatFileSize(attachment.sizeBytes)} · {attachment.mimeType} · enviado por {attachment.uploadedByUserName} em {formatDateTime(attachment.createdAt)}
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" className="button-secondary px-3 py-1.5 text-xs" disabled={downloadingId === attachment.id} onClick={() => onDownload(attachment)}>
+                    {downloadingId === attachment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Baixar
+                  </button>
+                  <button
+                    type="button"
+                    className="button-ghost px-3 py-1.5 text-xs text-rose hover:bg-rose/10"
+                    disabled={deletingId === attachment.id}
+                    onClick={() => onDelete(attachment)}
+                  >
+                    {deletingId === attachment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Remover
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -617,18 +697,30 @@ function DemandDetailsDrawer({
   onHistoryNote,
   onHistorySubmit,
   onUpdateStatus,
+  onUploadAttachment,
+  onDownloadAttachment,
+  onDeleteAttachment,
+  uploadingAttachment,
+  deletingAttachmentId,
+  downloadingAttachmentId,
 }: {
   demand: CabinetDemand | null
   responsibles: DemandResponsibleUser[]
   activeTab: DrawerTab
   historyNote: string
   saving: boolean
+  uploadingAttachment: boolean
+  deletingAttachmentId: string | null
+  downloadingAttachmentId: string | null
   onTab: (tab: DrawerTab) => void
   onClose: () => void
   onEdit: (demand: CabinetDemand) => void
   onHistoryNote: (value: string) => void
   onHistorySubmit: () => void
   onUpdateStatus: (status: DemandStatus, note: string, responsibleUserId?: string) => void
+  onUploadAttachment: (demand: CabinetDemand, file: File) => void
+  onDownloadAttachment: (demand: CabinetDemand, attachment: CabinetDemandAttachment) => void
+  onDeleteAttachment: (demand: CabinetDemand, attachment: CabinetDemandAttachment) => void
 }) {
   if (!demand) return null
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(demand.requesterAddress)}`
@@ -747,7 +839,17 @@ function DemandDetailsDrawer({
             />
           )}
 
-          {activeTab === 'attachments' && <DemandAttachments />}
+          {activeTab === 'attachments' && (
+            <DemandAttachments
+              demand={demand}
+              uploading={uploadingAttachment}
+              deletingId={deletingAttachmentId}
+              downloadingId={downloadingAttachmentId}
+              onUpload={(file) => onUploadAttachment(demand, file)}
+              onDownload={(attachment) => onDownloadAttachment(demand, attachment)}
+              onDelete={(attachment) => onDeleteAttachment(demand, attachment)}
+            />
+          )}
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white p-4">
@@ -928,7 +1030,7 @@ function DemandFormDrawer({
                     <Paperclip className="h-4 w-4" />
                     Anexos
                   </div>
-                  <p className="mt-1">Upload visual preparado. A persistência será habilitada quando existir endpoint de anexos.</p>
+                  <p className="mt-1">Depois de salvar a demanda, abra os detalhes e use a aba Anexos para enviar arquivos.</p>
                 </div>
               </div>
             </section>
@@ -975,6 +1077,8 @@ export function DemandsPage() {
   const [historyNote, setHistoryNote] = useState('')
   const [toast, setToast] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null)
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null)
   const debouncedSearch = useDebouncedValue(filters.search)
 
   useEffect(() => {
@@ -1063,6 +1167,47 @@ export function DemandsPage() {
     onError: (error) => alert(getErrorMessage(error)),
   })
 
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: async ({ demand, file }: { demand: CabinetDemand; file: File }) => {
+      const response = await api.post<{ attachment: CabinetDemandAttachment }>(`/demands/${demand.id}/attachments`, file, {
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+        },
+      })
+      return response.data.attachment
+    },
+    onSuccess: async (attachment) => {
+      setToast('Anexo enviado com sucesso.')
+      setSelectedDemand((current) => (
+        current && current.id === attachment.demandId
+          ? { ...current, attachments: [attachment, ...(current.attachments ?? [])] }
+          : current
+      ))
+      await queryClient.invalidateQueries({ queryKey: ['demands'] })
+    },
+    onError: (error) => alert(getErrorMessage(error)),
+  })
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: async ({ demand, attachment }: { demand: CabinetDemand; attachment: CabinetDemandAttachment }) => {
+      setDeletingAttachmentId(attachment.id)
+      await api.delete(`/demands/${demand.id}/attachments/${attachment.id}`)
+      return attachment
+    },
+    onSuccess: async (attachment) => {
+      setToast('Anexo removido.')
+      setSelectedDemand((current) => (
+        current && current.id === attachment.demandId
+          ? { ...current, attachments: (current.attachments ?? []).filter((item) => item.id !== attachment.id) }
+          : current
+      ))
+      await queryClient.invalidateQueries({ queryKey: ['demands'] })
+    },
+    onError: (error) => alert(getErrorMessage(error)),
+    onSettled: () => setDeletingAttachmentId(null),
+  })
+
   const data = demandsQuery.data
   const responsibles = responsiblesQuery.data ?? []
   const rawDemands = data?.demands ?? []
@@ -1101,6 +1246,27 @@ export function DemandsPage() {
 
   function quickUpdate(demand: CabinetDemand, payload: { status?: DemandStatus; responsibleUserId?: string; historyNote?: string }) {
     updateMutation.mutate({ demand, payload })
+  }
+
+  async function downloadAttachment(demand: CabinetDemand, attachment: CabinetDemandAttachment) {
+    try {
+      setDownloadingAttachmentId(attachment.id)
+      const response = await api.get(`/demands/${demand.id}/attachments/${attachment.id}/download`, {
+        responseType: 'blob',
+      })
+      const url = window.URL.createObjectURL(response.data)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = attachment.originalName
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      alert(getErrorMessage(error))
+    } finally {
+      setDownloadingAttachmentId(null)
+    }
   }
 
   return (
@@ -1184,12 +1350,22 @@ export function DemandsPage() {
         activeTab={detailsTab}
         historyNote={historyNote}
         saving={updateMutation.isPending}
+        uploadingAttachment={uploadAttachmentMutation.isPending}
+        deletingAttachmentId={deletingAttachmentId}
+        downloadingAttachmentId={downloadingAttachmentId}
         onTab={setDetailsTab}
         onClose={() => setSelectedDemand(null)}
         onEdit={openEdit}
         onHistoryNote={setHistoryNote}
         onHistorySubmit={() => selectedDemand && quickUpdate(selectedDemand, { historyNote })}
         onUpdateStatus={(status, note, responsibleUserId) => selectedDemand && quickUpdate(selectedDemand, { status, historyNote: note, responsibleUserId })}
+        onUploadAttachment={(demand, file) => uploadAttachmentMutation.mutate({ demand, file })}
+        onDownloadAttachment={downloadAttachment}
+        onDeleteAttachment={(demand, attachment) => {
+          if (window.confirm(`Remover o anexo "${attachment.originalName}"?`)) {
+            deleteAttachmentMutation.mutate({ demand, attachment })
+          }
+        }}
       />
 
       <DemandFormDrawer

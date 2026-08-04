@@ -140,6 +140,7 @@ model User {
   receivedDemands     CabinetDemand[]      @relation("DemandResponsible")
   createdDemands      CabinetDemand[]      @relation("DemandCreator")
   updatedDemandHistory CabinetDemandHistory[] @relation("DemandHistoryUpdater")
+  uploadedDemandAttachments CabinetDemandAttachment[] @relation("DemandAttachmentUploader")
   createdDobradaPauloAlexandreLeaders DobradaPauloAlexandreLeader[] @relation("DobradaPauloAlexandreLeaderCreator")
   updatedDobradaPauloAlexandreLeaders DobradaPauloAlexandreLeader[] @relation("DobradaPauloAlexandreLeaderUpdater")
   createdAt           DateTime             @default(now())
@@ -457,6 +458,7 @@ model CabinetDemand {
   createdByUser     User           @relation("DemandCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   resolvedAt        DateTime?
   history           CabinetDemandHistory[]
+  attachments       CabinetDemandAttachment[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -478,6 +480,23 @@ model CabinetDemandHistory {
   updatedByUserId String
   updatedByUser   User         @relation("DemandHistoryUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
   createdAt       DateTime     @default(now())
+
+  @@index([demandId])
+  @@index([createdAt])
+}
+
+model CabinetDemandAttachment {
+  id               String        @id @default(cuid())
+  demandId         String
+  demand           CabinetDemand @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  originalName     String
+  storedName       String        @unique
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String
+  uploadedByUserId String
+  uploadedByUser   User          @relation("DemandAttachmentUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  createdAt        DateTime      @default(now())
 
   @@index([demandId])
   @@index([createdAt])

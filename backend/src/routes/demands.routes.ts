@@ -1,6 +1,10 @@
-import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
+import { access, mkdir, rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import express, { Router } from 'express'
 import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
+import { env } from '../config/env.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
 import { asyncHandler } from '../utils/async-handler.js'
@@ -15,6 +19,7 @@ const demandStatusSchema = z.enum(['REQUESTED', 'IN_PROGRESS', 'RESOLVED'])
 const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
 const optionalQueryString = z.preprocess(emptyToUndefined, z.string().optional())
 const optionalBodyString = z.string().optional().nullable()
+const maxAttachmentBytes = 10 * 1024 * 1024
 
 const demandPayloadSchema = z.object({
   title: z.string().trim().min(3),
@@ -45,6 +50,14 @@ const demandInclude = {
   history: {
     include: {
       updatedByUser: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  },
+  attachments: {
+    include: {
+      uploadedByUser: true,
     },
     orderBy: {
       createdAt: 'desc',
@@ -82,7 +95,50 @@ function serializeDemand(demand: CabinetDemandWithRelations) {
       updatedByUserName: item.updatedByUser.name,
       createdAt: item.createdAt,
     })),
+    attachments: demand.attachments.map(serializeAttachment),
   }
+}
+
+function serializeAttachment(attachment: CabinetDemandWithRelations['attachments'][number]) {
+  return {
+    id: attachment.id,
+    demandId: attachment.demandId,
+    originalName: attachment.originalName,
+    mimeType: attachment.mimeType,
+    sizeBytes: attachment.sizeBytes,
+    uploadedByUserName: attachment.uploadedByUser.name,
+    createdAt: attachment.createdAt,
+  }
+}
+
+function getRequestFileName(value: string | string[] | undefined) {
+  const rawName = Array.isArray(value) ? value[0] : value
+  if (!rawName) return null
+
+  try {
+    return decodeURIComponent(rawName)
+  } catch {
+    return rawName
+  }
+}
+
+function safeFileName(fileName: string) {
+  const baseName = path.basename(fileName).replace(/[^\w.\- ()]/g, '_').trim()
+  return baseName || 'anexo'
+}
+
+async function ensureDemandExists(demandId: string) {
+  const demand = await prisma.cabinetDemand.findUnique({ where: { id: demandId } })
+
+  if (!demand) {
+    throw new HttpError(404, 'Demanda nao encontrada.')
+  }
+
+  return demand
+}
+
+function demandUploadDir(demandId: string) {
+  return path.join(env.UPLOAD_DIR, 'demands', demandId)
 }
 
 function resolvedAtFor(status: z.infer<typeof demandStatusSchema>, existingResolvedAt?: Date | null) {
@@ -224,6 +280,140 @@ demandsRouter.post(
     })
 
     response.status(201).json({ demand: serializeDemand(demand) })
+  }),
+)
+
+demandsRouter.get(
+  '/:id/attachments',
+  authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
+  asyncHandler(async (request, response) => {
+    const demandId = String(request.params.id)
+    await ensureDemandExists(demandId)
+
+    const attachments = await prisma.cabinetDemandAttachment.findMany({
+      where: { demandId },
+      include: { uploadedByUser: true },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    response.json({ attachments: attachments.map(serializeAttachment) })
+  }),
+)
+
+demandsRouter.post(
+  '/:id/attachments',
+  authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
+  express.raw({ type: '*/*', limit: maxAttachmentBytes }),
+  asyncHandler(async (request, response) => {
+    const demandId = String(request.params.id)
+    const currentUser = request.user!
+    await ensureDemandExists(demandId)
+
+    const fileBuffer = Buffer.isBuffer(request.body) ? request.body : Buffer.from([])
+    const originalName = getRequestFileName(request.headers['x-file-name'])
+
+    if (!originalName) {
+      throw new HttpError(400, 'Informe o nome do arquivo.')
+    }
+
+    if (fileBuffer.length === 0) {
+      throw new HttpError(400, 'Arquivo vazio ou invalido.')
+    }
+
+    const cleanedName = safeFileName(originalName)
+    const extension = path.extname(cleanedName)
+    const storedName = `${randomUUID()}${extension}`
+    const uploadDir = demandUploadDir(demandId)
+    const storagePath = path.join(uploadDir, storedName)
+    const mimeType = request.headers['content-type']?.split(';')[0] || 'application/octet-stream'
+
+    await mkdir(uploadDir, { recursive: true })
+    await writeFile(storagePath, fileBuffer)
+
+    const attachment = await prisma.cabinetDemandAttachment.create({
+      data: {
+        demandId,
+        originalName: cleanedName,
+        storedName,
+        mimeType,
+        sizeBytes: fileBuffer.length,
+        storagePath,
+        uploadedByUserId: currentUser.id,
+      },
+      include: { uploadedByUser: true },
+    })
+
+    await writeAuditLog({
+      actorUserId: currentUser.id,
+      action: 'UPDATE',
+      entityType: 'cabinet_demand',
+      entityId: demandId,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      nextData: { attachment: serializeAttachment(attachment) },
+    })
+
+    response.status(201).json({ attachment: serializeAttachment(attachment) })
+  }),
+)
+
+demandsRouter.get(
+  '/:id/attachments/:attachmentId/download',
+  authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
+  asyncHandler(async (request, response) => {
+    const demandId = String(request.params.id)
+    const attachmentId = String(request.params.attachmentId)
+    const attachment = await prisma.cabinetDemandAttachment.findFirst({
+      where: { id: attachmentId, demandId },
+    })
+
+    if (!attachment) {
+      throw new HttpError(404, 'Anexo nao encontrado.')
+    }
+
+    try {
+      await access(attachment.storagePath)
+    } catch {
+      throw new HttpError(404, 'Arquivo fisico nao encontrado.')
+    }
+
+    response.download(attachment.storagePath, attachment.originalName)
+  }),
+)
+
+demandsRouter.delete(
+  '/:id/attachments/:attachmentId',
+  authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
+  asyncHandler(async (request, response) => {
+    const demandId = String(request.params.id)
+    const attachmentId = String(request.params.attachmentId)
+    const currentUser = request.user!
+    const attachment = await prisma.cabinetDemandAttachment.findFirst({
+      where: { id: attachmentId, demandId },
+      include: { uploadedByUser: true },
+    })
+
+    if (!attachment) {
+      throw new HttpError(404, 'Anexo nao encontrado.')
+    }
+
+    await prisma.cabinetDemandAttachment.delete({
+      where: { id: attachment.id },
+    })
+
+    await rm(attachment.storagePath, { force: true })
+
+    await writeAuditLog({
+      actorUserId: currentUser.id,
+      action: 'DELETE',
+      entityType: 'cabinet_demand_attachment',
+      entityId: attachment.id,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      previousData: serializeAttachment(attachment),
+    })
+
+    response.status(204).send()
   }),
 )
 

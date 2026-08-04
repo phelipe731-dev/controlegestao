@@ -10,6 +10,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET precisa ter ao menos 16 caracteres'),
   JWT_EXPIRES_IN: z.string().default('12h'),
   DATABASE_URL: z.string().min(1),
+  UPLOAD_DIR: z.string().min(1).default('/app/uploads'),
 })
 
 export const env = envSchema.parse(process.env)

@@ -339,7 +339,10 @@ function RecentCampaigns({
           <h3 className="font-display text-lg font-bold text-ink">Disparos recentes</h3>
           <p className="mt-1 text-sm text-slate-500">Últimas campanhas criadas para WhatsApp.</p>
         </div>
-        <button type="button" className="button-secondary text-xs">Ver todas</button>
+        <button type="button" className="button-primary text-xs" onClick={onCreate}>
+          <Send className="h-4 w-4" />
+          Criar campanha
+        </button>
       </div>
 
       <div className="hidden overflow-x-auto lg:block">
@@ -604,6 +607,48 @@ function CampaignConfirmationModal({
   )
 }
 
+function CampaignFormModal({
+  open,
+  children,
+  onClose,
+}: {
+  open: boolean
+  children: ReactNode
+  onClose: () => void
+}) {
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    window.setTimeout(() => modalRef.current?.focus(), 0)
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
+  }, [onClose, open])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
+      <button type="button" className="absolute inset-0" aria-label="Fechar nova campanha" onClick={onClose} />
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Nova campanha" className="relative z-10 max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl outline-none">
+        <button type="button" className="absolute right-4 top-4 z-20 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-ink" aria-label="Fechar modal" onClick={onClose}>
+          <X className="h-5 w-5" />
+        </button>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-5">
@@ -619,6 +664,7 @@ function LoadingSkeleton() {
 export function CommunicationsPage() {
   const queryClient = useQueryClient()
   const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingCampaignAction>(null)
   const [toast, setToast] = useState('')
@@ -730,6 +776,7 @@ export function CommunicationsPage() {
     },
     onSuccess: async (_response, action) => {
       setConfirmOpen(false)
+      setCampaignModalOpen(false)
       setPendingAction(null)
       setCampaignForm(initialCampaignForm)
       setToast(action === 'draft' ? 'Rascunho salvo com sucesso.' : 'Campanha criada com sucesso.')
@@ -818,19 +865,21 @@ export function CommunicationsPage() {
         }}
       />
 
-      <RecentCampaigns campaigns={overview.campaigns.filter((campaign) => campaign.channelType === 'WHATSAPP')} onCreate={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })} />
+      <RecentCampaigns campaigns={overview.campaigns.filter((campaign) => campaign.channelType === 'WHATSAPP')} onCreate={() => setCampaignModalOpen(true)} />
 
-      <NewCampaignForm
-        form={campaignForm}
-        leaders={leadersQuery.data ?? []}
-        estimate={estimateQuery.data}
-        connected={connected}
-        evolutionConfigured={evolutionConfigured}
-        submitting={createCampaignMutation.isPending}
-        onChange={setCampaignForm}
-        onSubmit={requestCampaignSubmit}
-        onOpenQr={openQrFlow}
-      />
+      <CampaignFormModal open={campaignModalOpen} onClose={() => setCampaignModalOpen(false)}>
+        <NewCampaignForm
+          form={campaignForm}
+          leaders={leadersQuery.data ?? []}
+          estimate={estimateQuery.data}
+          connected={connected}
+          evolutionConfigured={evolutionConfigured}
+          submitting={createCampaignMutation.isPending}
+          onChange={setCampaignForm}
+          onSubmit={requestCampaignSubmit}
+          onOpenQr={openQrFlow}
+        />
+      </CampaignFormModal>
 
       <WhatsAppQrModal
         open={qrModalOpen}

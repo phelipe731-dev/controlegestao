@@ -1,3 +1,4 @@
+import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import clsx from 'clsx'
 
 export function Field({
@@ -7,7 +8,7 @@ export function Field({
 }: {
   label: string
   error?: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <label className="block">
@@ -18,30 +19,40 @@ export function Field({
   )
 }
 
-export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement> & { error?: string }) {
+export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { error?: string }>(
+  function TextInput(props, ref) {
   const { error, className, ...rest } = props
   return (
     <input
       {...rest}
+      ref={ref}
       className={clsx('field-base', error && 'border-rose focus:border-rose focus:ring-rose/20', className)}
     />
   )
-}
+  },
+)
 
-export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={clsx('field-base', props.className)} />
-}
+export const SelectInput = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
+  function SelectInput(props, ref) {
+    return <select {...props} ref={ref} className={clsx('field-base', props.className)} />
+  },
+)
 
-export function TextAreaInput(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={clsx('field-base min-h-28 resize-y', props.className)} />
-}
+export const TextAreaInput = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function TextAreaInput(props, ref) {
+    return <textarea {...props} ref={ref} className={clsx('field-base min-h-28 resize-y', props.className)} />
+  },
+)
 
-export function CheckboxInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export const CheckboxInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  function CheckboxInput(props, ref) {
   return (
     <input
       {...props}
+      ref={ref}
       type="checkbox"
       className="h-4 w-4 rounded border-slate-300 text-teal accent-teal focus:ring-teal focus:ring-offset-0"
     />
   )
-}
+  },
+)

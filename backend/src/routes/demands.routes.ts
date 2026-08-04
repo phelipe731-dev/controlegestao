@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma.js'
 import { asyncHandler } from '../utils/async-handler.js'
 import { writeAuditLog } from '../utils/audit.js'
 import { HttpError } from '../utils/http-error.js'
+import { demandScope } from '../utils/scopes.js'
 
 export const demandsRouter = Router()
 
@@ -20,6 +21,18 @@ const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
 const optionalQueryString = z.preprocess(emptyToUndefined, z.string().optional())
 const optionalBodyString = z.string().optional().nullable()
 const maxAttachmentBytes = 10 * 1024 * 1024
+const maxAttachmentsPerDemand = 25
+const maxAttachmentBytesPerDemand = 50 * 1024 * 1024
+const allowedAttachmentMimeTypes = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+const allowedAttachmentExtensions = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.txt', '.doc', '.docx'])
 
 const demandPayloadSchema = z.object({
   title: z.string().trim().min(3),
@@ -127,8 +140,12 @@ function safeFileName(fileName: string) {
   return baseName || 'anexo'
 }
 
-async function ensureDemandExists(demandId: string) {
-  const demand = await prisma.cabinetDemand.findUnique({ where: { id: demandId } })
+async function ensureDemandInScope(demandId: string, user: NonNullable<Express.Request['user']>) {
+  const demand = await prisma.cabinetDemand.findFirst({
+    where: {
+      AND: [{ id: demandId }, demandScope(user)],
+    },
+  })
 
   if (!demand) {
     throw new HttpError(404, 'Demanda nao encontrada.')
@@ -139,6 +156,14 @@ async function ensureDemandExists(demandId: string) {
 
 function demandUploadDir(demandId: string) {
   return path.join(env.UPLOAD_DIR, 'demands', demandId)
+}
+
+function ensureAllowedAttachment(cleanedName: string, mimeType: string) {
+  const extension = path.extname(cleanedName).toLowerCase()
+
+  if (!allowedAttachmentExtensions.has(extension) || !allowedAttachmentMimeTypes.has(mimeType)) {
+    throw new HttpError(400, 'Tipo de arquivo nao permitido para anexos.')
+  }
 }
 
 function resolvedAtFor(status: z.infer<typeof demandStatusSchema>, existingResolvedAt?: Date | null) {
@@ -180,6 +205,7 @@ demandsRouter.get(
     const filters = demandQuerySchema.parse(request.query)
     const where = {
       AND: [
+        demandScope(request.user!),
         filters.search
           ? {
               OR: [
@@ -288,7 +314,7 @@ demandsRouter.get(
   authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
   asyncHandler(async (request, response) => {
     const demandId = String(request.params.id)
-    await ensureDemandExists(demandId)
+    await ensureDemandInScope(demandId, request.user!)
 
     const attachments = await prisma.cabinetDemandAttachment.findMany({
       where: { demandId },
@@ -307,7 +333,7 @@ demandsRouter.post(
   asyncHandler(async (request, response) => {
     const demandId = String(request.params.id)
     const currentUser = request.user!
-    await ensureDemandExists(demandId)
+    await ensureDemandInScope(demandId, currentUser)
 
     const fileBuffer = Buffer.isBuffer(request.body) ? request.body : Buffer.from([])
     const originalName = getRequestFileName(request.headers['x-file-name'])
@@ -326,6 +352,18 @@ demandsRouter.post(
     const uploadDir = demandUploadDir(demandId)
     const storagePath = path.join(uploadDir, storedName)
     const mimeType = request.headers['content-type']?.split(';')[0] || 'application/octet-stream'
+    ensureAllowedAttachment(cleanedName, mimeType)
+
+    const aggregate = await prisma.cabinetDemandAttachment.aggregate({
+      where: { demandId },
+      _count: { _all: true },
+      _sum: { sizeBytes: true },
+    })
+    const currentSize = aggregate._sum.sizeBytes ?? 0
+
+    if ((aggregate._count._all ?? 0) >= maxAttachmentsPerDemand || currentSize + fileBuffer.length > maxAttachmentBytesPerDemand) {
+      throw new HttpError(400, 'Limite de anexos da demanda atingido.')
+    }
 
     await mkdir(uploadDir, { recursive: true })
     await writeFile(storagePath, fileBuffer)
@@ -363,6 +401,7 @@ demandsRouter.get(
   asyncHandler(async (request, response) => {
     const demandId = String(request.params.id)
     const attachmentId = String(request.params.attachmentId)
+    await ensureDemandInScope(demandId, request.user!)
     const attachment = await prisma.cabinetDemandAttachment.findFirst({
       where: { id: attachmentId, demandId },
     })
@@ -388,6 +427,7 @@ demandsRouter.delete(
     const demandId = String(request.params.id)
     const attachmentId = String(request.params.attachmentId)
     const currentUser = request.user!
+    await ensureDemandInScope(demandId, currentUser)
     const attachment = await prisma.cabinetDemandAttachment.findFirst({
       where: { id: attachmentId, demandId },
       include: { uploadedByUser: true },
@@ -424,8 +464,10 @@ demandsRouter.patch(
     const demandId = String(request.params.id)
     const payload = demandPayloadSchema.partial().parse(request.body)
     const currentUser = request.user!
-    const existing = await prisma.cabinetDemand.findUnique({
-      where: { id: demandId },
+    const existing = await prisma.cabinetDemand.findFirst({
+      where: {
+        AND: [{ id: demandId }, demandScope(currentUser)],
+      },
       include: demandInclude,
     })
 
@@ -491,8 +533,10 @@ demandsRouter.delete(
   authorize('ADMIN'),
   asyncHandler(async (request, response) => {
     const demandId = String(request.params.id)
-    const existing = await prisma.cabinetDemand.findUnique({
-      where: { id: demandId },
+    const existing = await prisma.cabinetDemand.findFirst({
+      where: {
+        AND: [{ id: demandId }, demandScope(request.user!)],
+      },
       include: demandInclude,
     })
 
@@ -503,6 +547,8 @@ demandsRouter.delete(
     await prisma.cabinetDemand.delete({
       where: { id: existing.id },
     })
+
+    await rm(demandUploadDir(existing.id), { recursive: true, force: true })
 
     await writeAuditLog({
       actorUserId: request.user!.id,

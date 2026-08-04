@@ -24,8 +24,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-campanha_db}?schema=public
-      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@campanha.local}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin@123}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
       RUN_SEED_ON_START: ${RUN_SEED_ON_START:-false}
       UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
     ports:

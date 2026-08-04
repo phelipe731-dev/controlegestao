@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
+import ExcelJS from 'exceljs'
 import { Router } from 'express'
-import * as XLSX from 'xlsx'
 import { z } from 'zod'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
@@ -41,6 +41,25 @@ function toReportRows(supporters: ReturnType<typeof serializeSupporter>[]) {
     OrigemConsentimento: supporter.consentSource,
     CadastradoEm: dayjs(supporter.createdAt).format('DD/MM/YYYY HH:mm'),
   }))
+}
+
+function csvEscape(value: unknown) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function rowsToCsv(rows: Record<string, unknown>[]) {
+  if (rows.length === 0) {
+    return ''
+  }
+
+  const headers = Object.keys(rows[0])
+  const lines = [
+    headers.map(csvEscape).join(','),
+    ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(',')),
+  ]
+
+  return `\uFEFF${lines.join('\n')}`
 }
 
 reportsRouter.get(
@@ -131,25 +150,30 @@ reportsRouter.get(
     })
 
     const rows = toReportRows(supporters.map(serializeSupporter))
-    const worksheet = XLSX.utils.json_to_sheet(rows)
 
     if (query.format === 'csv') {
-      const csv = XLSX.utils.sheet_to_csv(worksheet)
       response.setHeader('Content-Type', 'text/csv; charset=utf-8')
       response.setHeader('Content-Disposition', 'attachment; filename="relatorio-apoiadores.csv"')
-      response.send(csv)
+      response.send(rowsToCsv(rows))
       return
     }
 
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Apoiadores')
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' })
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Apoiadores')
+    worksheet.columns = Object.keys(rows[0] ?? { Relatorio: '' }).map((header) => ({
+      header,
+      key: header,
+      width: Math.max(header.length + 4, 16),
+    }))
+    worksheet.addRows(rows)
+    worksheet.getRow(1).font = { bold: true }
+    const buffer = await workbook.xlsx.writeBuffer()
 
     response.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
     response.setHeader('Content-Disposition', 'attachment; filename="relatorio-apoiadores.xlsx"')
-    response.send(buffer)
+    response.send(Buffer.from(buffer))
   }),
 )

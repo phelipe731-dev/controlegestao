@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
@@ -36,15 +37,53 @@ const campaignPayloadSchema = z.object({
   notifyAllBase: z.boolean().default(false),
 })
 
+function campaignScope(user: NonNullable<Express.Request['user']>): Prisma.CommunicationCampaignWhereInput {
+  switch (user.role.name) {
+    case 'ADMIN':
+      return {}
+    case 'SUPERVISOR':
+      return {
+        OR: [
+          { createdByUserId: user.id },
+          {
+            createdByUser: {
+              leaderProfile: {
+                supervisor: {
+                  userId: user.id,
+                },
+              },
+            },
+          },
+        ],
+      }
+    case 'LEADER':
+      return {
+        createdByUserId: user.id,
+      }
+  }
+}
+
+function inboxScope(user: NonNullable<Express.Request['user']>): Prisma.CommunicationInboxMessageWhereInput {
+  if (user.role.name === 'ADMIN') {
+    return {}
+  }
+
+  return {
+    supporter: supporterScope(user),
+  }
+}
+
 communicationsRouter.get(
   '/overview',
   authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
   asyncHandler(async (request, response) => {
+    const currentUser = request.user!
     const [channels, campaigns, inbox, supporterCount] = await Promise.all([
       prisma.communicationChannelConfig.findMany({
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
       }),
       prisma.communicationCampaign.findMany({
+        where: campaignScope(currentUser),
         include: {
           channelConfig: true,
           recipients: true,
@@ -54,6 +93,7 @@ communicationsRouter.get(
         take: 8,
       }),
       prisma.communicationInboxMessage.findMany({
+        where: inboxScope(currentUser),
         include: {
           supporter: true,
           channelConfig: true,
@@ -62,7 +102,7 @@ communicationsRouter.get(
         take: 12,
       }),
       prisma.supporter.count({
-        where: supporterScope(request.user!),
+        where: supporterScope(currentUser),
       }),
     ])
 

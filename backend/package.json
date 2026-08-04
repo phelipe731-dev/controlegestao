@@ -20,12 +20,14 @@
     "cors": "^2.8.6",
     "dayjs": "^1.11.21",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.11.0",
+    "prisma": "^6.19.3",
+    "projeto-ph-ks": "file:..",
     "tsx": "^4.22.4",
-    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -34,7 +36,9 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.9.0",
-    "prisma": "^6.19.3",
     "typescript": "^5.6.3"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticate } from '../middleware/auth.js'
+import { authenticate, authorize } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
 import { asyncHandler } from '../utils/async-handler.js'
 
@@ -9,6 +9,7 @@ settingsRouter.use(authenticate)
 
 settingsRouter.get(
   '/summary',
+  authorize('ADMIN'),
   asyncHandler(async (_request, response) => {
     const [auditCount, loginCount, failedLogins] = await Promise.all([
       prisma.auditLog.count(),

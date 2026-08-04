@@ -7,6 +7,7 @@ import { asyncHandler } from '../utils/async-handler.js'
 import { writeAuditLog } from '../utils/audit.js'
 import { HttpError } from '../utils/http-error.js'
 import { normalizeEmail, normalizeOptionalDigits, normalizeText } from '../utils/normalizers.js'
+import { dobradaPauloAlexandreLeaderScope } from '../utils/scopes.js'
 
 export const dobradaPauloAlexandreRouter = Router()
 
@@ -113,8 +114,11 @@ function serializeDobradaLeader(item: DobradaLeaderWithRelations) {
   }
 }
 
-function buildWhere(filters: z.infer<typeof querySchema>): Prisma.DobradaPauloAlexandreLeaderWhereInput {
-  const and: Prisma.DobradaPauloAlexandreLeaderWhereInput[] = []
+function buildWhere(
+  user: NonNullable<Express.Request['user']>,
+  filters: z.infer<typeof querySchema>,
+): Prisma.DobradaPauloAlexandreLeaderWhereInput {
+  const and: Prisma.DobradaPauloAlexandreLeaderWhereInput[] = [dobradaPauloAlexandreLeaderScope(user)]
   const search = filters.search?.trim()
   const digitsSearch = search?.replace(/\D/g, '')
 
@@ -150,7 +154,7 @@ function buildWhere(filters: z.infer<typeof querySchema>): Prisma.DobradaPauloAl
     })
   }
 
-  return and.length > 0 ? { AND: and } : {}
+  return { AND: and }
 }
 
 function buildData(payload: z.infer<typeof payloadSchema>) {
@@ -191,7 +195,7 @@ dobradaPauloAlexandreRouter.get(
   authorize('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (request, response) => {
     const filters = querySchema.parse(request.query)
-    const where = buildWhere(filters)
+    const where = buildWhere(request.user!, filters)
     const skip = (filters.page - 1) * filters.limit
 
     const [leaders, total] = await Promise.all([
@@ -249,8 +253,10 @@ dobradaPauloAlexandreRouter.put(
   authorize('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (request, response) => {
     const leaderId = String(request.params.id)
-    const existing = await prisma.dobradaPauloAlexandreLeader.findUnique({
-      where: { id: leaderId },
+    const existing = await prisma.dobradaPauloAlexandreLeader.findFirst({
+      where: {
+        AND: [{ id: leaderId }, dobradaPauloAlexandreLeaderScope(request.user!)],
+      },
       include: leaderInclude,
     })
 
@@ -290,8 +296,10 @@ dobradaPauloAlexandreRouter.post(
   authorize('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (request, response) => {
     const leaderId = String(request.params.leaderId)
-    const leader = await prisma.dobradaPauloAlexandreLeader.findUnique({
-      where: { id: leaderId },
+    const leader = await prisma.dobradaPauloAlexandreLeader.findFirst({
+      where: {
+        AND: [{ id: leaderId }, dobradaPauloAlexandreLeaderScope(request.user!)],
+      },
     })
 
     if (!leader) {
@@ -332,6 +340,7 @@ dobradaPauloAlexandreRouter.put(
       where: {
         id: supporterId,
         leaderId,
+        leader: dobradaPauloAlexandreLeaderScope(request.user!),
       },
     })
 
@@ -372,6 +381,7 @@ dobradaPauloAlexandreRouter.delete(
       where: {
         id: supporterId,
         leaderId,
+        leader: dobradaPauloAlexandreLeaderScope(request.user!),
       },
     })
 
@@ -402,8 +412,10 @@ dobradaPauloAlexandreRouter.delete(
   authorize('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (request, response) => {
     const leaderId = String(request.params.id)
-    const existing = await prisma.dobradaPauloAlexandreLeader.findUnique({
-      where: { id: leaderId },
+    const existing = await prisma.dobradaPauloAlexandreLeader.findFirst({
+      where: {
+        AND: [{ id: leaderId }, dobradaPauloAlexandreLeaderScope(request.user!)],
+      },
       include: leaderInclude,
     })
 

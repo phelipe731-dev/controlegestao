@@ -28,11 +28,45 @@ const resetPasswordSchema = z.object({
   password: z.string().min(8),
 })
 
+const loginAttempts = new Map<string, { count: number; resetAt: number }>()
+const maxLoginAttempts = 8
+const loginWindowMs = 15 * 60 * 1000
+
+function loginAttemptKey(ipAddress: string | undefined, email: string) {
+  return `${ipAddress ?? 'unknown'}:${email}`
+}
+
+function ensureLoginAllowed(key: string) {
+  const attempt = loginAttempts.get(key)
+
+  if (!attempt || attempt.resetAt <= Date.now()) {
+    loginAttempts.delete(key)
+    return
+  }
+
+  if (attempt.count >= maxLoginAttempts) {
+    throw new HttpError(429, 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.')
+  }
+}
+
+function registerLoginFailure(key: string) {
+  const current = loginAttempts.get(key)
+
+  if (!current || current.resetAt <= Date.now()) {
+    loginAttempts.set(key, { count: 1, resetAt: Date.now() + loginWindowMs })
+    return
+  }
+
+  loginAttempts.set(key, { ...current, count: current.count + 1 })
+}
+
 authRouter.post(
   '/login',
   asyncHandler(async (request, response) => {
     const payload = loginSchema.parse(request.body)
     const email = normalizeEmail(payload.email)
+    const attemptKey = loginAttemptKey(request.ip, email)
+    ensureLoginAllowed(attemptKey)
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -53,9 +87,11 @@ authRouter.post(
     })
 
     if (!user || !passwordMatches || user.status !== 'ACTIVE') {
+      registerLoginFailure(attemptKey)
       throw new HttpError(401, 'Credenciais invalidas.')
     }
 
+    loginAttempts.delete(attemptKey)
     const token = signToken(user)
 
     await writeAuditLog({

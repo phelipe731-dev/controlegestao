@@ -12,6 +12,22 @@ import {
 const prisma = new PrismaClient()
 
 const normalizeDigits = (value: string) => value.replace(/\D/g, '')
+const defaultLocalAdminEmail = 'admin@campanha.local'
+const defaultLocalAdminPassword = 'Admin@123'
+
+function seedAdminEmail() {
+  return process.env.SEED_ADMIN_EMAIL ?? defaultLocalAdminEmail
+}
+
+function seedAdminPassword() {
+  const password = process.env.SEED_ADMIN_PASSWORD
+
+  if (process.env.NODE_ENV === 'production' && (!password || password === defaultLocalAdminPassword)) {
+    throw new Error('Defina SEED_ADMIN_PASSWORD forte antes de executar seed em producao.')
+  }
+
+  return password ?? defaultLocalAdminPassword
+}
 
 async function upsertRole(name: RoleName, description: string) {
   return prisma.role.upsert({
@@ -26,11 +42,13 @@ async function main() {
   const supervisorRole = await upsertRole(RoleName.SUPERVISOR, 'Supervisor com visibilidade dos lideres vinculados')
   await upsertRole(RoleName.LEADER, 'Lider com cadastro e acompanhamento dos apoiadores')
 
-  const adminPassword = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? 'Admin@123', 10)
+  const adminSeedEmail = seedAdminEmail()
+  const adminSeedPassword = seedAdminPassword()
+  const adminPassword = await bcrypt.hash(adminSeedPassword, 10)
   const supervisorPassword = await bcrypt.hash('Supervisor@123', 10)
 
   const admin = await prisma.user.upsert({
-    where: { email: process.env.SEED_ADMIN_EMAIL ?? 'admin@campanha.local' },
+    where: { email: adminSeedEmail },
     update: {
       roleId: adminRole.id,
       passwordHash: adminPassword,
@@ -39,7 +57,7 @@ async function main() {
     create: {
       roleId: adminRole.id,
       name: 'Administrador da Campanha',
-      email: process.env.SEED_ADMIN_EMAIL ?? 'admin@campanha.local',
+      email: adminSeedEmail,
       cpf: '00000000001',
       phone: '(11) 99000-0001',
       phoneNormalized: normalizeDigits('(11) 99000-0001'),
@@ -267,8 +285,10 @@ async function main() {
   }
 
   console.log('Seed concluido com perfis-base e configuracoes iniciais.')
-  console.log(`Admin: ${admin.email} / ${process.env.SEED_ADMIN_PASSWORD ?? 'Admin@123'}`)
-  console.log('Supervisor: supervisor@campanha.local / Supervisor@123')
+  console.log(`Admin: ${admin.email}${process.env.NODE_ENV === 'production' ? '' : ` / ${adminSeedPassword}`}`)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Supervisor: supervisor@campanha.local / Supervisor@123')
+  }
 }
 
 main()

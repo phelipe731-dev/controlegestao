@@ -223,7 +223,12 @@ function parseWahaStatus(data: unknown): WahaConnectionStatus {
 
 export async function getWahaSessionInfo(): Promise<WahaSessionInfo> {
   const data = await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}`)
-  const rawNumber = extractString(data, ['id', 'user'])
+  const session = data as { me?: { id?: unknown; user?: unknown } }
+  const rawNumber = typeof session.me?.id === 'string'
+    ? session.me.id
+    : typeof session.me?.user === 'string'
+      ? session.me.user
+      : extractString(data, ['id', 'user'])
   const phoneDigits = rawNumber?.split('@')[0]?.replace(/\D/g, '') ?? ''
 
   return {

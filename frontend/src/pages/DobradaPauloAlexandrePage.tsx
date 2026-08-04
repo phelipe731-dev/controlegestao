@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { Pencil, Search, SlidersHorizontal, Trash2, UsersRound, X } from 'lucide-react'
+import { Pencil, Plus, Search, SlidersHorizontal, Trash2, UsersRound, X } from 'lucide-react'
 import { Field, SelectInput, TextAreaInput, TextInput } from '../components/FormControls'
 import { StatusPill } from '../components/StatusPill'
 import { api } from '../lib/api'
@@ -132,6 +132,7 @@ export function DobradaPauloAlexandrePage() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingLeader, setEditingLeader] = useState<DobradaPauloAlexandreLeader | null>(null)
   const [filters, setFilters] = useState<DobradaLeaderFilters>(initialFilters)
   const pageSize = 25
@@ -176,6 +177,7 @@ export function DobradaPauloAlexandrePage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['dobrada-paulo-alexandre-leaders'] })
       createForm.reset(initialFormValues)
+      setShowCreateForm(false)
       alert('Liderança cadastrada na dobrada.')
     },
     onError: (error) => alert(getErrorMessage(error)),
@@ -290,6 +292,22 @@ export function DobradaPauloAlexandrePage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-display text-lg font-bold text-ink">Lideranças vinculadas à dobrada</h3>
+          <p className="mt-1 text-sm text-slate-500">Use o botão abaixo apenas quando for adicionar um novo nome à operação.</p>
+        </div>
+        <button
+          type="button"
+          className="button-primary"
+          onClick={() => setShowCreateForm((current) => !current)}
+        >
+          {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {showCreateForm ? 'Fechar cadastro' : 'Nova liderança'}
+        </button>
+      </div>
+
+      {showCreateForm && (
       <form noValidate className="app-card p-5 sm:p-6" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values), handleInvalidSubmit)}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
@@ -343,8 +361,20 @@ export function DobradaPauloAlexandrePage() {
           <button type="submit" className="button-primary" disabled={createMutation.isPending}>
             {createMutation.isPending ? 'Salvando...' : 'Cadastrar na dobrada'}
           </button>
+          <button
+            type="button"
+            className="button-secondary"
+            disabled={createMutation.isPending}
+            onClick={() => {
+              createForm.reset(initialFormValues)
+              setShowCreateForm(false)
+            }}
+          >
+            Cancelar
+          </button>
         </div>
       </form>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-64 flex-1">

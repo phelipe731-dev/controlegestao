@@ -212,8 +212,10 @@ export async function getWahaConnectionStatus(): Promise<WahaConnectionStatus> {
 
 function parseWahaStatus(data: unknown): WahaConnectionStatus {
   const status = (extractString(data, ['status']) ?? '').toUpperCase()
+  const session = data as { engine?: { state?: unknown } }
+  const engineState = typeof session.engine?.state === 'string' ? session.engine.state.toUpperCase() : ''
 
-  if (status === 'WORKING') return 'working'
+  if (status === 'WORKING' || engineState === 'CONNECTED') return 'working'
   if (status === 'SCAN_QR' || status === 'SCAN_QR_CODE') return 'scan_qr'
   if (status === 'STARTING') return 'starting'
   if (status === 'STOPPED') return 'stopped'
@@ -224,11 +226,22 @@ function parseWahaStatus(data: unknown): WahaConnectionStatus {
 export async function getWahaSessionInfo(): Promise<WahaSessionInfo> {
   const data = await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}`)
   const session = data as { me?: { id?: unknown; user?: unknown } }
-  const rawNumber = typeof session.me?.id === 'string'
+  let rawNumber = typeof session.me?.id === 'string'
     ? session.me.id
     : typeof session.me?.user === 'string'
       ? session.me.user
       : extractString(data, ['id', 'user'])
+
+  if (!rawNumber && parseWahaStatus(data) === 'working') {
+    try {
+      const me = await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}/me`)
+      const profile = me as { id?: unknown; user?: unknown }
+      rawNumber = typeof profile.id === 'string' ? profile.id : typeof profile.user === 'string' ? profile.user : null
+    } catch {
+      rawNumber = null
+    }
+  }
+
   const phoneDigits = rawNumber?.split('@')[0]?.replace(/\D/g, '') ?? ''
 
   return {

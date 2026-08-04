@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -30,6 +30,15 @@ type LeaderFilters = {
   city: string
   neighborhood: string
   status: string
+}
+
+type LocationOptions = {
+  cities: string[]
+  neighborhoods: string[]
+  pairs: Array<{
+    city: string
+    neighborhood: string
+  }>
 }
 
 const initialValues: LeaderFormValues = {
@@ -301,10 +310,13 @@ export function LeaderFormPage() {
   const queryClient = useQueryClient()
   const isEdit = Boolean(id)
   const canManage = user?.role === 'ADMIN' || (user?.role === 'SUPERVISOR' && user.canCreateLeaders)
+  const [newNeighborhoodMode, setNewNeighborhoodMode] = useState(false)
 
   const form = useForm<LeaderFormValues>({
     defaultValues: initialValues,
   })
+  const selectedCity = form.watch('city')
+  const selectedNeighborhood = form.watch('neighborhood')
 
   const { data: supervisors } = useQuery({
     queryKey: ['supervisors-options'],
@@ -324,6 +336,24 @@ export function LeaderFormPage() {
     enabled: Boolean(id),
   })
 
+  const { data: leadersForLocations } = useQuery({
+    queryKey: ['leaders-location-options'],
+    queryFn: async () => {
+      const response = await api.get<{ leaders: Leader[] }>('/leaders')
+      return response.data.leaders
+    },
+    enabled: canManage,
+  })
+
+  const { data: reportLocationOptions } = useQuery({
+    queryKey: ['leader-form-report-location-options'],
+    queryFn: async () => {
+      const response = await api.get<LocationOptions>('/reports/supporters/options')
+      return response.data
+    },
+    enabled: canManage,
+  })
+
   useEffect(() => {
     if (!leaderData) {
       return
@@ -341,7 +371,61 @@ export function LeaderFormPage() {
       status: leaderData.status,
       password: '',
     })
+    setNewNeighborhoodMode(false)
   }, [form, leaderData])
+
+  const locationPairs = useMemo(() => {
+    const pairs = new Map<string, { city: string; neighborhood: string }>()
+
+    ;(reportLocationOptions?.pairs ?? []).forEach((pair) => {
+      if (!pair.city?.trim() || !pair.neighborhood?.trim()) return
+      pairs.set(`${pair.city.trim().toLowerCase()}::${pair.neighborhood.trim().toLowerCase()}`, {
+        city: pair.city.trim(),
+        neighborhood: pair.neighborhood.trim(),
+      })
+    })
+
+    ;(leadersForLocations ?? []).forEach((leader) => {
+      if (!leader.city?.trim() || !leader.neighborhood?.trim()) return
+      pairs.set(`${leader.city.trim().toLowerCase()}::${leader.neighborhood.trim().toLowerCase()}`, {
+        city: leader.city.trim(),
+        neighborhood: leader.neighborhood.trim(),
+      })
+    })
+
+    if (leaderData?.city?.trim() && leaderData.neighborhood?.trim()) {
+      pairs.set(`${leaderData.city.trim().toLowerCase()}::${leaderData.neighborhood.trim().toLowerCase()}`, {
+        city: leaderData.city.trim(),
+        neighborhood: leaderData.neighborhood.trim(),
+      })
+    }
+
+    return Array.from(pairs.values()).sort((left, right) => `${left.city} ${left.neighborhood}`.localeCompare(`${right.city} ${right.neighborhood}`))
+  }, [leaderData, leadersForLocations, reportLocationOptions])
+
+  const cityOptions = useMemo(() => {
+    return Array.from(new Set(locationPairs.map((pair) => pair.city))).sort((left, right) => left.localeCompare(right))
+  }, [locationPairs])
+
+  const neighborhoodOptions = useMemo(() => {
+    const options = selectedCity.trim()
+      ? locationPairs.filter((pair) => pair.city.toLowerCase() === selectedCity.trim().toLowerCase()).map((pair) => pair.neighborhood)
+      : locationPairs.map((pair) => pair.neighborhood)
+
+    if (selectedNeighborhood.trim()) {
+      options.push(selectedNeighborhood.trim())
+    }
+
+    return Array.from(new Set(options)).sort((left, right) => left.localeCompare(right))
+  }, [locationPairs, selectedCity, selectedNeighborhood])
+
+  useEffect(() => {
+    if (!selectedNeighborhood || neighborhoodOptions.includes(selectedNeighborhood) || neighborhoodOptions.length === 0) {
+      return
+    }
+
+    setNewNeighborhoodMode(true)
+  }, [neighborhoodOptions, selectedNeighborhood])
 
   const mutation = useMutation({
     mutationFn: async (values: LeaderFormValues) => {
@@ -429,10 +513,67 @@ export function LeaderFormPage() {
               <TextInput {...form.register('fullAddress')} />
             </Field>
             <Field label="Cidade">
-              <TextInput {...form.register('city', { required: true })} />
+              <TextInput {...form.register('city', { required: true })} list="leader-city-options" placeholder="Digite ou selecione a cidade" />
+              <datalist id="leader-city-options">
+                {cityOptions.map((city) => (
+                  <option key={city} value={city} />
+                ))}
+              </datalist>
             </Field>
             <Field label="Bairro">
-              <TextInput {...form.register('neighborhood', { required: true })} />
+              {newNeighborhoodMode || neighborhoodOptions.length === 0 ? (
+                <div className="space-y-2">
+                  <TextInput {...form.register('neighborhood', { required: true })} placeholder="Digite o novo bairro" autoFocus />
+                  {neighborhoodOptions.length > 0 ? (
+                    <button
+                      type="button"
+                      className="button-ghost text-xs"
+                      onClick={() => {
+                        setNewNeighborhoodMode(false)
+                        form.setValue('neighborhood', neighborhoodOptions[0] ?? '', { shouldValidate: true })
+                      }}
+                    >
+                      Usar bairro já cadastrado
+                    </button>
+                  ) : (
+                    <p className="text-xs text-slate-400">Nenhum bairro cadastrado ainda para esta cidade. Digite para criar.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-[1fr,auto]">
+                  <SelectInput
+                    value={selectedNeighborhood}
+                    onChange={(event) => {
+                      if (event.target.value === '__new__') {
+                        setNewNeighborhoodMode(true)
+                        form.setValue('neighborhood', '', { shouldValidate: true })
+                        return
+                      }
+
+                      form.setValue('neighborhood', event.target.value, { shouldValidate: true })
+                    }}
+                  >
+                    <option value="">Selecione um bairro</option>
+                    {neighborhoodOptions.map((neighborhood) => (
+                      <option key={neighborhood} value={neighborhood}>
+                        {neighborhood}
+                      </option>
+                    ))}
+                    <option value="__new__">+ Cadastrar novo bairro</option>
+                  </SelectInput>
+                  <button
+                    type="button"
+                    className="button-secondary justify-center whitespace-nowrap"
+                    onClick={() => {
+                      setNewNeighborhoodMode(true)
+                      form.setValue('neighborhood', '', { shouldValidate: true })
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Novo
+                  </button>
+                </div>
+              )}
             </Field>
           </div>
         </div>

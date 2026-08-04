@@ -46,6 +46,7 @@ export function statusLabel(value: string) {
     ELECTORAL_ZONE: 'Zona eleitoral',
     LEADER: 'Por lider',
     CITY: 'Por cidade',
+    MANUAL_LIST: 'Lista manual',
     WHATSAPP: 'WhatsApp',
     SMS: 'SMS',
     EMAIL: 'E-mail',

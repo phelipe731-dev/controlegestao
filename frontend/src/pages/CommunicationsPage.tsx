@@ -37,10 +37,11 @@ import type {
 type CampaignFormState = {
   title: string
   body: string
-  audienceMode: 'ALL' | 'SEGMENT'
+  audienceMode: 'ALL' | 'SEGMENT' | 'MANUAL'
   segmentType: 'CITY' | 'LEADER'
   city: string
   leaderId: string
+  manualRecipients: string
   scheduleMode: 'NOW' | 'SCHEDULE'
   scheduledAt: string
 }
@@ -54,6 +55,7 @@ const initialCampaignForm: CampaignFormState = {
   segmentType: 'CITY',
   city: '',
   leaderId: '',
+  manualRecipients: '',
   scheduleMode: 'NOW',
   scheduledAt: '',
 }
@@ -84,6 +86,18 @@ const campaignStatusClasses: Record<CampaignStatus, string> = {
   SCHEDULED: 'bg-blue-50 text-blue-700',
   SENT: 'bg-emerald-50 text-emerald-700',
   FAILED: 'bg-rose/10 text-rose',
+}
+
+function parseManualRecipients(value: string) {
+  return value
+    .split(/\r?\n|,|;/)
+    .map((line) => {
+      const trimmed = line.trim()
+      const phone = trimmed.replace(/\D/g, '')
+      const name = trimmed.replace(/[+\d().\-\s]/g, ' ').replace(/\s+/g, ' ').trim()
+      return { phone, name: name || null }
+    })
+    .filter((recipient, index, recipients) => recipient.phone.length >= 10 && recipients.findIndex((item) => item.phone === recipient.phone) === index)
 }
 
 function currencyNumber(value: number) {
@@ -170,6 +184,7 @@ function WhatsAppQrModal({
   const modalRef = useRef<HTMLDivElement>(null)
   const status = channel?.status ?? 'DISCONNECTED'
   const style = connectionStyles[status]
+  const isConnected = ['CONNECTED', 'READY'].includes(status)
 
   useEffect(() => {
     if (!open) return
@@ -195,8 +210,8 @@ function WhatsAppQrModal({
       <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Conectar WhatsApp Business" className="app-card relative z-10 w-full max-w-3xl overflow-hidden">
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
           <div>
-            <h3 className="font-display text-lg font-bold text-ink">Conectar WhatsApp Business</h3>
-            <p className="mt-1 text-sm text-slate-500">Escaneie o QR Code com o WhatsApp do número que será utilizado.</p>
+            <h3 className="font-display text-lg font-bold text-ink">{isConnected ? 'WhatsApp Business conectado' : 'Conectar WhatsApp Business'}</h3>
+            <p className="mt-1 text-sm text-slate-500">{isConnected ? 'Sessão pronta para envio de campanhas.' : 'Escaneie o QR Code com o WhatsApp do número que será utilizado.'}</p>
           </div>
           <button type="button" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-ink" aria-label="Fechar modal" onClick={onClose}>
             <X className="h-5 w-5" />
@@ -205,7 +220,15 @@ function WhatsAppQrModal({
 
         <div className="grid gap-6 p-5 md:grid-cols-[240px,1fr]">
           <div>
-            <WhatsAppQrPreview token={channel?.qrToken} />
+            {isConnected ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-8 text-center text-emerald-700 shadow-sm">
+                <CheckCircle2 className="mx-auto h-16 w-16" />
+                <div className="mt-4 font-display text-xl font-bold">Conectado</div>
+                <div className="mt-1 text-sm">{channel?.phoneNumber ?? channel?.senderId ?? 'WhatsApp pronto'}</div>
+              </div>
+            ) : (
+              <WhatsAppQrPreview token={channel?.qrToken} />
+            )}
             <div className={`mx-auto mt-3 w-fit rounded-lg px-3 py-1.5 text-xs font-semibold ${style.badge}`}>
               {refreshing ? 'Gerando QR Code' : connectionLabels[status]}
             </div>
@@ -230,12 +253,19 @@ function WhatsAppQrModal({
         </div>
 
         <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 p-5">
-          <button type="button" className="button-secondary" disabled={refreshing} onClick={onRefresh}>
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Atualizar QR
-          </button>
+          {isConnected ? (
+            <button type="button" className="button-primary" onClick={onClose}>
+              <CheckCircle2 className="h-4 w-4" />
+              Conectado
+            </button>
+          ) : (
+            <button type="button" className="button-secondary" disabled={refreshing} onClick={onRefresh}>
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Atualizar QR
+            </button>
+          )}
           <button type="button" className="button-secondary" onClick={onClose}>
-            Cancelar
+            {isConnected ? 'Fechar' : 'Cancelar'}
           </button>
         </div>
       </div>
@@ -460,6 +490,7 @@ function NewCampaignForm({
 }) {
   const charsLeft = messageLimit - form.body.length
   const isScheduled = form.scheduleMode === 'SCHEDULE'
+  const manualRecipientsCount = parseManualRecipients(form.manualRecipients).length
 
   return (
     <section className="app-card p-5 sm:p-6">
@@ -502,6 +533,7 @@ function NewCampaignForm({
           <div className="section-label">Público</div>
           <RadioCard active={form.audienceMode === 'ALL'} title="Toda a base" description="Enviar para todos os contatos aptos da sua base." onClick={() => onChange({ ...form, audienceMode: 'ALL' })} />
           <RadioCard active={form.audienceMode === 'SEGMENT'} title="Segmento específico" description="Escolha filtros para enviar somente para parte da sua base." onClick={() => onChange({ ...form, audienceMode: 'SEGMENT' })} />
+          <RadioCard active={form.audienceMode === 'MANUAL'} title="Lista manual" description="Cole telefones avulsos sem precisar cadastrar apoiadores." onClick={() => onChange({ ...form, audienceMode: 'MANUAL' })} />
           {form.audienceMode === 'SEGMENT' ? (
             <div className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
               <Field label="Filtro">
@@ -524,8 +556,17 @@ function NewCampaignForm({
               )}
             </div>
           ) : null}
+          {form.audienceMode === 'MANUAL' ? (
+            <Field label="Telefones">
+              <TextAreaInput
+                value={form.manualRecipients}
+                onChange={(event) => onChange({ ...form, manualRecipients: event.target.value })}
+                placeholder={'Um telefone por linha. Ex.:\n5513999999999\n(13) 98888-7777 Maria'}
+              />
+            </Field>
+          ) : null}
           <div className="rounded-xl border border-teal/10 bg-teal/5 p-3 text-sm text-teal">
-            Público estimado: <strong>{estimate === undefined ? 'calculando...' : `${currencyNumber(estimate)} contatos aptos`}</strong>
+            Público estimado: <strong>{form.audienceMode === 'MANUAL' ? `${currencyNumber(manualRecipientsCount)} telefones válidos` : estimate === undefined ? 'calculando...' : `${currencyNumber(estimate)} contatos aptos`}</strong>
           </div>
         </div>
 
@@ -707,9 +748,11 @@ export function CommunicationsPage() {
   const estimateParams = useMemo(() => {
     const audienceType: CampaignAudienceType = campaignForm.audienceMode === 'ALL'
       ? 'ALL_SUPPORTERS'
-      : campaignForm.segmentType === 'CITY'
-        ? 'CITY'
-        : 'LEADER'
+      : campaignForm.audienceMode === 'MANUAL'
+        ? 'MANUAL_LIST'
+        : campaignForm.segmentType === 'CITY'
+          ? 'CITY'
+          : 'LEADER'
     return {
       audienceType,
       city: audienceType === 'CITY' ? campaignForm.city : '',
@@ -723,7 +766,7 @@ export function CommunicationsPage() {
       const response = await api.get<{ total: number }>('/communications/audience-estimate', { params: estimateParams })
       return response.data.total
     },
-    enabled: Boolean(overview),
+    enabled: Boolean(overview) && campaignForm.audienceMode !== 'MANUAL',
   })
 
   const ensureQrChannelMutation = useMutation({
@@ -756,9 +799,11 @@ export function CommunicationsPage() {
     mutationFn: async (action: Exclude<PendingCampaignAction, null>) => {
       const audienceType: CampaignAudienceType = campaignForm.audienceMode === 'ALL'
         ? 'ALL_SUPPORTERS'
-        : campaignForm.segmentType === 'CITY'
-          ? 'CITY'
-          : 'LEADER'
+        : campaignForm.audienceMode === 'MANUAL'
+          ? 'MANUAL_LIST'
+          : campaignForm.segmentType === 'CITY'
+            ? 'CITY'
+            : 'LEADER'
 
       return api.post('/communications/campaigns', {
         title: campaignForm.title,
@@ -769,6 +814,7 @@ export function CommunicationsPage() {
         city: audienceType === 'CITY' ? campaignForm.city : null,
         electoralZone: null,
         leaderId: audienceType === 'LEADER' ? campaignForm.leaderId : null,
+        manualRecipients: audienceType === 'MANUAL_LIST' ? parseManualRecipients(campaignForm.manualRecipients) : [],
         scheduledAt: campaignForm.scheduleMode === 'SCHEDULE' ? campaignForm.scheduledAt : null,
         notifyAllBase: false,
         saveAsDraft: action === 'draft',
@@ -801,13 +847,14 @@ export function CommunicationsPage() {
     if (campaignForm.body.length > messageLimit) return 'A mensagem ultrapassou o limite de caracteres.'
     if (action !== 'draft' && !evolutionConfigured) return 'Configure o WAHA antes de enviar campanhas reais.'
     if (action !== 'draft' && !connected) return 'Conecte um número do WhatsApp antes de criar uma campanha.'
+    if (campaignForm.audienceMode === 'MANUAL' && parseManualRecipients(campaignForm.manualRecipients).length === 0) return 'Informe ao menos um telefone válido na lista manual.'
     if (campaignForm.audienceMode === 'SEGMENT' && campaignForm.segmentType === 'CITY' && !campaignForm.city.trim()) return 'Informe a cidade do segmento.'
     if (campaignForm.audienceMode === 'SEGMENT' && campaignForm.segmentType === 'LEADER' && !campaignForm.leaderId) return 'Selecione o líder do segmento.'
     if (campaignForm.scheduleMode === 'SCHEDULE') {
       if (!campaignForm.scheduledAt) return 'Informe data e horário para agendar.'
       if (new Date(campaignForm.scheduledAt) <= new Date()) return 'Escolha uma data futura para agendar.'
     }
-    if (action !== 'draft' && (estimateQuery.data ?? 0) <= 0) return 'Nenhum contato apto encontrado para o público selecionado.'
+    if (action !== 'draft' && campaignForm.audienceMode !== 'MANUAL' && (estimateQuery.data ?? 0) <= 0) return 'Nenhum contato apto encontrado para o público selecionado.'
     return null
   }
 

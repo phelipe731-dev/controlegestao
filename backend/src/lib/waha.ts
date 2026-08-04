@@ -10,6 +10,11 @@ export type WahaQrCode = {
 
 export type WahaConnectionStatus = 'working' | 'scan_qr' | 'starting' | 'stopped' | 'failed' | 'unknown'
 
+export type WahaSessionInfo = {
+  status: WahaConnectionStatus
+  phoneNumber: string | null
+}
+
 const configured = Boolean(env.WAHA_API_URL && env.WAHA_API_KEY)
 
 function buildUrl(path: string) {
@@ -214,6 +219,17 @@ function parseWahaStatus(data: unknown): WahaConnectionStatus {
   if (status === 'STOPPED') return 'stopped'
   if (status === 'FAILED') return 'failed'
   return 'unknown'
+}
+
+export async function getWahaSessionInfo(): Promise<WahaSessionInfo> {
+  const data = await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}`)
+  const rawNumber = extractString(data, ['id', 'user'])
+  const phoneDigits = rawNumber?.split('@')[0]?.replace(/\D/g, '') ?? ''
+
+  return {
+    status: parseWahaStatus(data),
+    phoneNumber: phoneDigits ? `+${phoneDigits}` : null,
+  }
 }
 
 export async function logoutWahaSession() {

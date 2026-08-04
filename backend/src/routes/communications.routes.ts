@@ -9,7 +9,7 @@ import { HttpError } from '../utils/http-error.js'
 import { supporterScope } from '../utils/scopes.js'
 import {
   connectWahaSession,
-  getWahaConnectionStatus,
+  getWahaSessionInfo,
   getWahaSessionName,
   isWahaConfigured,
   logoutWahaSession,
@@ -82,17 +82,21 @@ const campaignPayloadSchema = z.object({
   subject: z.string().optional().nullable(),
   body: z.string().min(10),
   channelConfigId: z.string().min(1).optional().nullable(),
-  audienceType: z.enum(['ALL_SUPPORTERS', 'CITY', 'ELECTORAL_ZONE', 'LEADER']),
+  audienceType: z.enum(['ALL_SUPPORTERS', 'CITY', 'ELECTORAL_ZONE', 'LEADER', 'MANUAL_LIST']),
   city: z.string().optional().nullable(),
   electoralZone: z.string().optional().nullable(),
   leaderId: z.string().optional().nullable(),
+  manualRecipients: z.array(z.object({
+    phone: z.string().min(8),
+    name: z.string().optional().nullable(),
+  })).default([]),
   scheduledAt: z.string().optional().nullable(),
   notifyAllBase: z.boolean().default(false),
   saveAsDraft: z.boolean().default(false),
 })
 
 const audienceEstimateSchema = z.object({
-  audienceType: z.enum(['ALL_SUPPORTERS', 'CITY', 'ELECTORAL_ZONE', 'LEADER']).default('ALL_SUPPORTERS'),
+  audienceType: z.enum(['ALL_SUPPORTERS', 'CITY', 'ELECTORAL_ZONE', 'LEADER', 'MANUAL_LIST']).default('ALL_SUPPORTERS'),
   city: z.string().optional().nullable(),
   electoralZone: z.string().optional().nullable(),
   leaderId: z.string().optional().nullable(),
@@ -173,14 +177,15 @@ async function syncWhatsAppQrChannel() {
   if (!channel || !isWahaConfigured()) return channel
 
   try {
-    const state = await getWahaConnectionStatus()
-    const status = state === 'working' ? 'READY' : state === 'stopped' ? 'DRAFT' : state === 'failed' ? 'ERROR' : ['scan_qr', 'starting'].includes(state) ? 'CONNECTING' : channel.status
+    const info = await getWahaSessionInfo()
+    const status = info.status === 'working' ? 'READY' : info.status === 'stopped' ? 'DRAFT' : info.status === 'failed' ? 'ERROR' : ['scan_qr', 'starting'].includes(info.status) ? 'CONNECTING' : channel.status
 
-    if (status !== channel.status) {
+    if (status !== channel.status || info.phoneNumber !== channel.phoneNumber) {
       return prisma.communicationChannelConfig.update({
         where: { id: channel.id },
         data: {
           status,
+          phoneNumber: info.phoneNumber ?? channel.phoneNumber,
           lastSyncAt: new Date(),
           qrToken: status === 'READY' ? null : channel.qrToken,
         },
@@ -206,11 +211,7 @@ async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: st
     where: {
       campaignId,
       status: 'QUEUED',
-      supporter: {
-        phone: {
-          not: null,
-        },
-      },
+      OR: [{ phone: { not: null } }, { supporter: { phone: { not: null } } }],
     },
     include: {
       supporter: true,
@@ -221,7 +222,7 @@ async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: st
 
   for (const recipient of recipients) {
     try {
-      const result = await sendWahaTextMessage(recipient.supporter.phone ?? '', message)
+      const result = await sendWahaTextMessage(recipient.phone ?? recipient.supporter?.phone ?? '', message)
       await prisma.campaignRecipient.update({
         where: { id: recipient.id },
         data: {
@@ -603,16 +604,26 @@ communicationsRouter.post(
       throw new HttpError(400, 'Informe uma data futura para agendar a campanha.')
     }
 
-    const audienceWhere = buildAudienceWhere(currentUser, payload)
+    if (payload.audienceType === 'MANUAL_LIST' && payload.manualRecipients.length === 0) {
+      throw new HttpError(400, 'Informe ao menos um telefone para a lista manual.')
+    }
 
-    const audience = await prisma.supporter.findMany({
-      where: audienceWhere,
-      select: {
-        id: true,
-      },
-    })
+    const audience = payload.audienceType === 'MANUAL_LIST'
+      ? []
+      : await prisma.supporter.findMany({
+          where: buildAudienceWhere(currentUser, payload),
+          select: {
+            id: true,
+          },
+        })
 
-    if (!payload.saveAsDraft && audience.length === 0) {
+    const manualRecipients = payload.manualRecipients.map((recipient) => ({
+      phone: recipient.phone.replace(/\D/g, ''),
+      displayName: recipient.name?.trim() || null,
+      status: 'QUEUED' as const,
+    })).filter((recipient, index, recipients) => recipient.phone && recipients.findIndex((item) => item.phone === recipient.phone) === index)
+
+    if (!payload.saveAsDraft && audience.length === 0 && manualRecipients.length === 0) {
       throw new HttpError(400, 'Nenhum apoiador encontrado para o publico selecionado.')
     }
 
@@ -631,10 +642,14 @@ communicationsRouter.post(
         scheduledAt: payload.scheduledAt ? new Date(payload.scheduledAt) : null,
         createdByUserId: currentUser.id,
         recipients: {
-          create: payload.saveAsDraft ? [] : audience.map((supporter) => ({
-            supporterId: supporter.id,
-            status: 'QUEUED',
-          })),
+          create: payload.saveAsDraft
+            ? []
+            : payload.audienceType === 'MANUAL_LIST'
+              ? manualRecipients
+              : audience.map((supporter) => ({
+                  supporterId: supporter.id,
+                  status: 'QUEUED',
+                })),
         },
       },
       include: {

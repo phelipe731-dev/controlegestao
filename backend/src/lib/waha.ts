@@ -8,7 +8,7 @@ export type WahaQrCode = {
   base64: string | null
 }
 
-export type WahaConnectionStatus = 'working' | 'scan_qr' | 'starting' | 'stopped' | 'unknown'
+export type WahaConnectionStatus = 'working' | 'scan_qr' | 'starting' | 'stopped' | 'failed' | 'unknown'
 
 const configured = Boolean(env.WAHA_API_URL && env.WAHA_API_KEY)
 
@@ -102,8 +102,10 @@ export function normalizeWhatsAppNumber(phone?: string | null) {
 export async function ensureWahaSession() {
   if (!configured) return
 
+  let status: WahaConnectionStatus | null = null
+
   try {
-    await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}`)
+    status = parseWahaStatus(await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}`))
   } catch (error) {
     if (!isMissingSession(error)) throw error
 
@@ -124,14 +126,55 @@ export async function ensureWahaSession() {
     })
   }
 
+  if (status === 'failed') {
+    await stopWahaSession()
+  }
+
+  await startWahaSession()
+}
+
+async function startWahaSession() {
   await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}/start`, {
     method: 'POST',
     body: JSON.stringify({}),
   })
 }
 
+async function stopWahaSession() {
+  await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}/stop`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+async function waitForWahaQrStatus() {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const status = await getWahaConnectionStatus()
+    if (status === 'scan_qr' || status === 'working') return status
+    if (status === 'failed') {
+      await stopWahaSession()
+      await startWahaSession()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+  }
+
+  return getWahaConnectionStatus()
+}
+
 export async function connectWahaSession(): Promise<WahaQrCode> {
   await ensureWahaSession()
+  const status = await waitForWahaQrStatus()
+
+  if (status === 'working') {
+    return {
+      code: null,
+      base64: null,
+    }
+  }
+
+  if (status !== 'scan_qr') {
+    throw new HttpError(422, 'Sessao do WAHA ainda nao gerou QR Code. Aguarde alguns segundos e tente novamente.')
+  }
 
   const imageData = await requestWaha(`/api/${encodeURIComponent(env.WAHA_SESSION)}/auth/qr?format=image`, {
     headers: {
@@ -159,12 +202,17 @@ export async function connectWahaSession(): Promise<WahaQrCode> {
 
 export async function getWahaConnectionStatus(): Promise<WahaConnectionStatus> {
   const data = await requestWaha(`/api/sessions/${encodeURIComponent(env.WAHA_SESSION)}`)
+  return parseWahaStatus(data)
+}
+
+function parseWahaStatus(data: unknown): WahaConnectionStatus {
   const status = (extractString(data, ['status']) ?? '').toUpperCase()
 
   if (status === 'WORKING') return 'working'
   if (status === 'SCAN_QR' || status === 'SCAN_QR_CODE') return 'scan_qr'
   if (status === 'STARTING') return 'starting'
   if (status === 'STOPPED') return 'stopped'
+  if (status === 'FAILED') return 'failed'
   return 'unknown'
 }
 

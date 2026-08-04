@@ -174,7 +174,7 @@ async function syncWhatsAppQrChannel() {
 
   try {
     const state = await getWahaConnectionStatus()
-    const status = state === 'working' ? 'READY' : state === 'stopped' ? 'DRAFT' : ['scan_qr', 'starting'].includes(state) ? 'CONNECTING' : channel.status
+    const status = state === 'working' ? 'READY' : state === 'stopped' ? 'DRAFT' : state === 'failed' ? 'ERROR' : ['scan_qr', 'starting'].includes(state) ? 'CONNECTING' : channel.status
 
     if (status !== channel.status) {
       return prisma.communicationChannelConfig.update({

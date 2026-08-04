@@ -446,7 +446,14 @@ export function SupporterFormPage() {
 
   const mutation = useMutation({
     mutationFn: async (values: SupporterFormValues) => {
-      const payload = { ...values, leaderId: user?.role === 'LEADER' ? user.leaderId : values.leaderId }
+      const payload = {
+        ...values,
+        fullName: values.fullName.trim(),
+        phone: values.phone.trim(),
+        fullAddress: values.fullAddress.trim(),
+        notes: values.notes.trim(),
+        leaderId: user?.role === 'LEADER' ? user.leaderId : values.leaderId,
+      }
       if (isEdit) {
         const r = await api.put<{ supporter: Supporter }>(`/supporters/${id}`, payload)
         return r.data.supporter
@@ -465,7 +472,7 @@ export function SupporterFormPage() {
 
   const handleInvalidSubmit = (errors: FieldErrors<SupporterFormValues>) => {
     const labels: Partial<Record<keyof SupporterFormValues, string>> = {
-      fullName: 'nome completo',
+      fullName: 'nome completo com pelo menos 3 caracteres',
       phone: 'telefone',
       birthDate: 'data de nascimento',
       fullAddress: 'endereço completo',
@@ -517,17 +524,35 @@ export function SupporterFormPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nome completo">
-              <TextInput {...form.register('fullName', { required: true })} placeholder="Nome completo" />
+              <TextInput
+                {...form.register('fullName', {
+                  required: true,
+                  validate: (value) => value.trim().length >= 3,
+                })}
+                placeholder="Nome completo"
+              />
             </Field>
             <Field label="Telefone">
-              <TextInput {...form.register('phone', { required: true })} placeholder="(11) 90000-0000" />
+              <TextInput
+                {...form.register('phone', {
+                  required: true,
+                  validate: (value) => value.replace(/\D/g, '').length >= 8,
+                })}
+                placeholder="(11) 90000-0000"
+              />
             </Field>
             <Field label="Data de nascimento">
               <TextInput type="date" {...form.register('birthDate', { required: true })} />
             </Field>
             <div className="sm:col-span-2">
               <Field label="Endereço completo">
-                <TextAreaInput {...form.register('fullAddress', { required: true })} placeholder="Rua, número, bairro, cidade e complemento se houver" />
+                <TextAreaInput
+                  {...form.register('fullAddress', {
+                    required: true,
+                    validate: (value) => value.trim().length >= 5,
+                  })}
+                  placeholder="Rua, número, bairro, cidade e complemento se houver"
+                />
               </Field>
             </div>
             <Field label="Líder responsável">

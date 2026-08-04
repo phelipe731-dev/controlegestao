@@ -1,124 +1,609 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Mail, MessageSquareMore, QrCode, RadioTower, Send, Smartphone, Users } from 'lucide-react'
-import { CheckboxInput, Field, SelectInput, TextAreaInput, TextInput } from '../components/FormControls'
+import {
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  Eye,
+  Loader2,
+  MessageCircle,
+  MessageSquareMore,
+  MoreVertical,
+  QrCode,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Smartphone,
+  Users,
+  WifiOff,
+  X,
+} from 'lucide-react'
+import { Field, SelectInput, TextAreaInput, TextInput } from '../components/FormControls'
 import { api } from '../lib/api'
 import { getErrorMessage } from '../lib/errors'
 import { formatDateTime, statusLabel } from '../lib/format'
-import type { CommunicationChannelType, CommunicationsOverview, Leader } from '../types/api'
+import type {
+  CampaignAudienceType,
+  CampaignStatus,
+  CommunicationChannel,
+  CommunicationChannelStatus,
+  CommunicationCampaign,
+  CommunicationsOverview,
+  Leader,
+} from '../types/api'
 
-const channelIcons: Record<CommunicationChannelType, typeof Smartphone> = {
-  WHATSAPP: Smartphone,
-  SMS: RadioTower,
-  EMAIL: Mail,
+type CampaignFormState = {
+  title: string
+  body: string
+  audienceMode: 'ALL' | 'SEGMENT'
+  segmentType: 'CITY' | 'LEADER'
+  city: string
+  leaderId: string
+  scheduleMode: 'NOW' | 'SCHEDULE'
+  scheduledAt: string
+}
+
+type PendingCampaignAction = 'draft' | 'send' | null
+
+const initialCampaignForm: CampaignFormState = {
+  title: '',
+  body: '',
+  audienceMode: 'ALL',
+  segmentType: 'CITY',
+  city: '',
+  leaderId: '',
+  scheduleMode: 'NOW',
+  scheduledAt: '',
+}
+
+const messageLimit = 1024
+
+const connectionLabels: Record<CommunicationChannelStatus | 'DISCONNECTED', string> = {
+  DRAFT: 'Desconectado',
+  CONNECTING: 'Aguardando leitura',
+  CONNECTED: 'Conectado',
+  READY: 'Conectado',
+  ERROR: 'Erro na conexão',
+  DISCONNECTED: 'Desconectado',
+}
+
+const connectionStyles: Record<CommunicationChannelStatus | 'DISCONNECTED', { card: string; icon: string; text: string; badge: string }> = {
+  DRAFT: { card: 'bg-slate-100', icon: 'text-slate-500', text: 'text-slate-500', badge: 'bg-slate-100 text-slate-600' },
+  CONNECTING: { card: 'bg-amber/10', icon: 'text-amber', text: 'text-amber', badge: 'bg-amber/10 text-amber' },
+  CONNECTED: { card: 'bg-emerald-50', icon: 'text-emerald-600', text: 'text-emerald-700', badge: 'bg-emerald-50 text-emerald-700' },
+  READY: { card: 'bg-emerald-50', icon: 'text-emerald-600', text: 'text-emerald-700', badge: 'bg-emerald-50 text-emerald-700' },
+  ERROR: { card: 'bg-rose/10', icon: 'text-rose', text: 'text-rose', badge: 'bg-rose/10 text-rose' },
+  DISCONNECTED: { card: 'bg-slate-100', icon: 'text-slate-500', text: 'text-slate-500', badge: 'bg-slate-100 text-slate-600' },
+}
+
+const campaignStatusClasses: Record<CampaignStatus, string> = {
+  DRAFT: 'bg-slate-100 text-slate-600',
+  QUEUED: 'bg-amber/10 text-amber',
+  SCHEDULED: 'bg-blue-50 text-blue-700',
+  SENT: 'bg-emerald-50 text-emerald-700',
+  FAILED: 'bg-rose/10 text-rose',
+}
+
+function currencyNumber(value: number) {
+  return new Intl.NumberFormat('pt-BR').format(value)
 }
 
 function StatCard({
-  label,
+  title,
   value,
+  helper,
   icon: Icon,
-  color,
-  bg,
+  tone,
 }: {
-  label: string
-  value: number
-  icon: React.ComponentType<{ className?: string }>
-  color: string
-  bg: string
+  title: string
+  value: string | number
+  helper?: string
+  icon: ComponentType<{ className?: string }>
+  tone: string
 }) {
   return (
-    <div className="app-card flex items-center gap-4 p-5">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${bg}`}>
-        <Icon className={`h-5 w-5 ${color}`} />
+    <div className="app-card flex min-h-[104px] items-center gap-4 p-5">
+      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${tone}`}>
+        <Icon className="h-6 w-6" />
       </div>
       <div className="min-w-0">
-        <div className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-        <div className="mt-1 font-display text-3xl font-bold text-ink">{value}</div>
+        <div className="text-sm font-semibold text-slate-500">{title}</div>
+        <div className="mt-1 truncate font-display text-3xl font-bold text-ink">{value}</div>
+        {helper ? <div className="mt-1 text-xs text-slate-400">{helper}</div> : null}
       </div>
     </div>
   )
 }
 
-function ChannelCard({
-  channel,
-  onRefreshQr,
-}: {
-  channel: CommunicationsOverview['channels'][number]
-  onRefreshQr: (id: string) => void
-}) {
-  const Icon = channelIcons[channel.type]
+function CampaignStatusBadge({ status }: { status: CampaignStatus }) {
   return (
-    <div className="app-card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal/10 text-teal">
-            <Icon className="h-5 w-5" />
-          </div>
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${campaignStatusClasses[status]}`}>
+      {statusLabel(status)}
+    </span>
+  )
+}
+
+function WhatsAppQrPreview({ token }: { token?: string | null }) {
+  const seed = token || 'WHATSAPP-BUSINESS-QR'
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="grid grid-cols-9 gap-1">
+        {Array.from({ length: 81 }).map((_, index) => {
+          const code = seed.charCodeAt(index % seed.length)
+          const active = (code + index * 7) % 4 !== 0
+          return <div key={index} className={`aspect-square rounded-[3px] ${active ? 'bg-ink' : 'bg-slate-100'}`} />
+        })}
+      </div>
+      <div className="mt-3 flex justify-center">
+        <span className="rounded-full bg-white px-2 py-1 text-xl shadow-sm">☎</span>
+      </div>
+    </div>
+  )
+}
+
+function WhatsAppQrModal({
+  open,
+  channel,
+  refreshing,
+  onRefresh,
+  onClose,
+}: {
+  open: boolean
+  channel?: CommunicationChannel
+  refreshing: boolean
+  onRefresh: () => void
+  onClose: () => void
+}) {
+  const modalRef = useRef<HTMLDivElement>(null)
+  const status = channel?.status ?? 'DISCONNECTED'
+  const style = connectionStyles[status]
+
+  useEffect(() => {
+    if (!open) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    window.setTimeout(() => modalRef.current?.focus(), 0)
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
+  }, [onClose, open])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
+      <button type="button" className="absolute inset-0" aria-label="Fechar QR Code" onClick={onClose} />
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Conectar WhatsApp Business" className="app-card relative z-10 w-full max-w-3xl overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
           <div>
-            <div className="font-semibold text-ink">{channel.name}</div>
-            <div className="text-sm text-slate-500">
-              {statusLabel(channel.type)} • {statusLabel(channel.mode)}
+            <h3 className="font-display text-lg font-bold text-ink">Conectar WhatsApp Business</h3>
+            <p className="mt-1 text-sm text-slate-500">Escaneie o QR Code com o WhatsApp do número que será utilizado.</p>
+          </div>
+          <button type="button" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-ink" aria-label="Fechar modal" onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-6 p-5 md:grid-cols-[240px,1fr]">
+          <div>
+            <WhatsAppQrPreview token={channel?.qrToken} />
+            <div className={`mx-auto mt-3 w-fit rounded-lg px-3 py-1.5 text-xs font-semibold ${style.badge}`}>
+              {refreshing ? 'Gerando QR Code' : connectionLabels[status]}
+            </div>
+          </div>
+          <div className="space-y-4 self-center">
+            {['Abra o WhatsApp no celular', 'Vá em Aparelhos conectados', 'Toque em Conectar aparelho', 'Escaneie o QR Code'].map((item, index) => (
+              <div key={item} className="flex items-center gap-3 text-sm text-slate-600">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal text-xs font-bold text-white">{index + 1}</span>
+                {item}
+              </div>
+            ))}
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+              A leitura real depende da integração do provedor WhatsApp. O sistema mantém o QR e o status preparados para sincronização.
             </div>
           </div>
         </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{statusLabel(channel.status)}</span>
-      </div>
 
-      <div className="mt-5 grid gap-3 text-sm text-slate-600">
-        <div>Fornecedor: {channel.providerName || 'Configuração manual'}</div>
-        <div>Identificador: {channel.senderId || channel.phoneNumber || '-'}</div>
-        <div>Última sincronização: {formatDateTime(channel.lastSyncAt)}</div>
-      </div>
-
-      {channel.mode === 'QR' ? (
-        <div className="mt-5 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <QrCode className="h-4 w-4" />
-            Vinculação por QR Code
-          </div>
-          <div className="mt-3 grid grid-cols-5 gap-1 rounded-lg bg-white p-3">
-            {Array.from({ length: 25 }).map((_, index) => (
-              <div
-                key={`${channel.id}-${index}`}
-                className={`aspect-square rounded-[4px] ${((channel.qrToken?.charCodeAt(index % (channel.qrToken.length || 1)) || index) + index) % 3 === 0 ? 'bg-ink' : 'bg-slate-200'}`}
-              />
-            ))}
-          </div>
-          <div className="mt-3 break-all text-xs text-slate-500">{channel.qrToken || 'QR pendente'}</div>
-          <button type="button" className="button-secondary mt-4" onClick={() => onRefreshQr(channel.id)}>
+        <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 p-5">
+          <button type="button" className="button-secondary" disabled={refreshing} onClick={onRefresh}>
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Atualizar QR
           </button>
+          <button type="button" className="button-secondary" onClick={onClose}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WhatsAppConnectionCard({
+  channel,
+  refreshing,
+  disconnecting,
+  onConnect,
+  onDisconnect,
+}: {
+  channel?: CommunicationChannel
+  refreshing: boolean
+  disconnecting: boolean
+  onConnect: () => void
+  onDisconnect: () => void
+}) {
+  const status = channel?.status ?? 'DISCONNECTED'
+  const isConnected = ['CONNECTED', 'READY'].includes(status)
+  const style = connectionStyles[status]
+  const number = channel?.phoneNumber || channel?.senderId || 'Número não conectado'
+
+  return (
+    <section className="app-card p-5 sm:p-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h3 className="font-display text-lg font-bold text-ink">WhatsApp Business QR</h3>
+          <p className="mt-1 text-sm text-slate-500">Canal único de envio</p>
+          <div className="mt-5 flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <MessageCircle className="h-7 w-7" />
+            </div>
+            <div>
+              <div className="font-display text-xl font-bold text-ink">{number}</div>
+              <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${style.badge}`}>{connectionLabels[status]}</span>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-500">
+            <span className="inline-flex items-center gap-2">
+              <Clock3 className="h-4 w-4" />
+              Última sincronização: {formatDateTime(channel?.lastSyncAt)}
+            </span>
+            <span>Sessão: {channel?.name ?? 'WhatsApp Business QR'}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+          {!isConnected ? (
+            <button type="button" className="button-primary justify-center" disabled={refreshing} onClick={onConnect}>
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+              {status === 'CONNECTING' ? 'Abrir QR Code' : 'Conectar WhatsApp'}
+            </button>
+          ) : (
+            <>
+              <button type="button" className="button-secondary justify-center" disabled={refreshing} onClick={onConnect}>
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Reconectar
+              </button>
+              <button type="button" className="button-danger justify-center" disabled={disconnecting} onClick={onDisconnect}>
+                {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <WifiOff className="h-4 w-4" />}
+                Desconectar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RecentCampaigns({
+  campaigns,
+  onCreate,
+}: {
+  campaigns: CommunicationCampaign[]
+  onCreate: () => void
+}) {
+  if (campaigns.length === 0) {
+    return (
+      <section className="app-card p-8 text-center">
+        <Send className="mx-auto h-10 w-10 text-slate-300" />
+        <h3 className="mt-3 font-display text-lg font-bold text-ink">Nenhuma campanha criada</h3>
+        <p className="mt-1 text-sm text-slate-500">Crie sua primeira campanha de WhatsApp para se comunicar com sua base.</p>
+        <button type="button" className="button-primary mt-4" onClick={onCreate}>
+          Criar primeira campanha
+        </button>
+      </section>
+    )
+  }
+
+  return (
+    <section className="app-card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
+        <div>
+          <h3 className="font-display text-lg font-bold text-ink">Disparos recentes</h3>
+          <p className="mt-1 text-sm text-slate-500">Últimas campanhas criadas para WhatsApp.</p>
+        </div>
+        <button type="button" className="button-secondary text-xs">Ver todas</button>
+      </div>
+
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="crm-table">
+          <thead>
+            <tr>
+              <th>Campanha</th>
+              <th>Público</th>
+              <th>Agendada/enviada em</th>
+              <th>Status</th>
+              <th className="text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {campaigns.map((campaign) => (
+              <tr key={campaign.id}>
+                <td>
+                  <div className="font-semibold text-ink">{campaign.title}</div>
+                  <div className="mt-0.5 text-xs text-slate-400">Criada em {formatDateTime(campaign.createdAt)}</div>
+                </td>
+                <td>
+                  <div>{statusLabel(campaign.audienceType)}</div>
+                  <div className="mt-0.5 text-xs text-slate-400">{campaign.recipientsCount} destinatários</div>
+                </td>
+                <td>{campaign.scheduledAt ? formatDateTime(campaign.scheduledAt) : campaign.sentAt ? formatDateTime(campaign.sentAt) : 'Envio imediato'}</td>
+                <td><CampaignStatusBadge status={campaign.status} /></td>
+                <td>
+                  <div className="flex justify-end gap-1">
+                    <button type="button" className="button-ghost px-2.5 py-1.5" aria-label="Visualizar campanha">
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button type="button" className="button-ghost px-2.5 py-1.5" aria-label="Duplicar campanha">
+                      <Copy className="h-4 w-4" />
+                    </button>
+                    <button type="button" className="button-ghost px-2.5 py-1.5" aria-label="Mais ações">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="space-y-3 p-4 lg:hidden">
+        {campaigns.map((campaign) => (
+          <div key={campaign.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold text-ink">{campaign.title}</div>
+                <div className="mt-1 text-xs text-slate-500">{statusLabel(campaign.audienceType)} · {campaign.recipientsCount} destinatários</div>
+              </div>
+              <CampaignStatusBadge status={campaign.status} />
+            </div>
+            <div className="mt-3 text-sm text-slate-500">{campaign.scheduledAt ? formatDateTime(campaign.scheduledAt) : 'Envio imediato'}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function RadioCard({
+  active,
+  title,
+  description,
+  children,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  description: string
+  children?: ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`rounded-xl border p-4 text-left transition ${active ? 'border-teal bg-teal/5 ring-2 ring-teal/10' : 'border-slate-200 bg-white hover:border-teal/40'}`}
+      onClick={onClick}
+    >
+      <div className="flex items-start gap-3">
+        <span className={`mt-0.5 h-4 w-4 rounded-full border ${active ? 'border-teal bg-teal shadow-[inset_0_0_0_4px_white]' : 'border-slate-300'}`} />
+        <span>
+          <span className="block font-semibold text-ink">{title}</span>
+          <span className="mt-1 block text-sm text-slate-500">{description}</span>
+          {children}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+function NewCampaignForm({
+  form,
+  leaders,
+  estimate,
+  connected,
+  submitting,
+  onChange,
+  onSubmit,
+  onOpenQr,
+}: {
+  form: CampaignFormState
+  leaders: Leader[]
+  estimate?: number
+  connected: boolean
+  submitting: boolean
+  onChange: (form: CampaignFormState) => void
+  onSubmit: (action: Exclude<PendingCampaignAction, null>) => void
+  onOpenQr: () => void
+}) {
+  const charsLeft = messageLimit - form.body.length
+  const isScheduled = form.scheduleMode === 'SCHEDULE'
+
+  return (
+    <section className="app-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h3 className="font-display text-lg font-bold text-ink">Nova campanha</h3>
+          <p className="mt-1 text-sm text-slate-500">Crie uma comunicação para toda a base ou para um público específico.</p>
+        </div>
+        {!connected ? (
+          <button type="button" className="button-secondary text-xs" onClick={onOpenQr}>
+            <QrCode className="h-4 w-4" />
+            Conectar WhatsApp
+          </button>
+        ) : null}
+      </div>
+
+      {!connected ? (
+        <div className="mt-5 rounded-xl border border-amber/20 bg-amber/10 p-4 text-sm text-amber">
+          Conecte um número do WhatsApp antes de criar uma campanha.
         </div>
       ) : null}
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr,1fr,1fr]">
+        <div className="space-y-4">
+          <div className="section-label">Conteúdo</div>
+          <Field label="Nome da campanha">
+            <TextInput value={form.title} onChange={(event) => onChange({ ...form, title: event.target.value })} placeholder="Ex.: Promoção de fim de semana" />
+          </Field>
+          <Field label="Mensagem">
+            <TextAreaInput value={form.body} onChange={(event) => onChange({ ...form, body: event.target.value.slice(0, messageLimit) })} placeholder="Digite a mensagem que será enviada pelo WhatsApp." />
+          </Field>
+          <div className={`text-right text-xs ${charsLeft < 80 ? 'text-amber' : 'text-slate-400'}`}>{form.body.length}/{messageLimit}</div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="section-label">Público</div>
+          <RadioCard active={form.audienceMode === 'ALL'} title="Toda a base" description="Enviar para todos os contatos aptos da sua base." onClick={() => onChange({ ...form, audienceMode: 'ALL' })} />
+          <RadioCard active={form.audienceMode === 'SEGMENT'} title="Segmento específico" description="Escolha filtros para enviar somente para parte da sua base." onClick={() => onChange({ ...form, audienceMode: 'SEGMENT' })} />
+          {form.audienceMode === 'SEGMENT' ? (
+            <div className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <Field label="Filtro">
+                <SelectInput value={form.segmentType} onChange={(event) => onChange({ ...form, segmentType: event.target.value as CampaignFormState['segmentType'] })}>
+                  <option value="CITY">Cidade</option>
+                  <option value="LEADER">Líder</option>
+                </SelectInput>
+              </Field>
+              {form.segmentType === 'CITY' ? (
+                <Field label="Cidade">
+                  <TextInput value={form.city} onChange={(event) => onChange({ ...form, city: event.target.value })} />
+                </Field>
+              ) : (
+                <Field label="Líder">
+                  <SelectInput value={form.leaderId} onChange={(event) => onChange({ ...form, leaderId: event.target.value })}>
+                    <option value="">Selecione</option>
+                    {leaders.map((leader) => <option key={leader.id} value={leader.id}>{leader.name}</option>)}
+                  </SelectInput>
+                </Field>
+              )}
+            </div>
+          ) : null}
+          <div className="rounded-xl border border-teal/10 bg-teal/5 p-3 text-sm text-teal">
+            Público estimado: <strong>{estimate === undefined ? 'calculando...' : `${currencyNumber(estimate)} contatos aptos`}</strong>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="section-label">Agendamento</div>
+          <RadioCard active={form.scheduleMode === 'NOW'} title="Enviar agora" description="Preparar a campanha para envio imediato." onClick={() => onChange({ ...form, scheduleMode: 'NOW', scheduledAt: '' })} />
+          <RadioCard active={form.scheduleMode === 'SCHEDULE'} title="Agendar envio" description="Escolha data e horário para disparar." onClick={() => onChange({ ...form, scheduleMode: 'SCHEDULE' })} />
+          {isScheduled ? (
+            <Field label="Agendar para">
+              <TextInput type="datetime-local" value={form.scheduledAt} onChange={(event) => onChange({ ...form, scheduledAt: event.target.value })} />
+            </Field>
+          ) : null}
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+            O horário de envio respeita o fuso horário do número conectado.
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+        <div className="section-label">Pré-visualização</div>
+        <div className="mt-3 max-w-md rounded-2xl bg-[#d8fdd2] px-4 py-3 text-sm text-slate-700 shadow-sm">
+          <div className="whitespace-pre-line">{form.body || 'Sua mensagem aparecerá aqui.'}</div>
+          <div className="mt-2 text-right text-[10px] text-slate-500">09:41</div>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap justify-end gap-3">
+        <button type="button" className="button-secondary" disabled={submitting} onClick={() => onSubmit('draft')}>
+          Salvar rascunho
+        </button>
+        <button type="button" className="button-primary" disabled={submitting || !connected} onClick={() => onSubmit('send')}>
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {form.scheduleMode === 'SCHEDULE' ? 'Agendar campanha' : 'Enviar campanha'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function CampaignConfirmationModal({
+  open,
+  form,
+  channel,
+  estimate,
+  submitting,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  form: CampaignFormState
+  channel?: CommunicationChannel
+  estimate: number
+  submitting: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
+      <button type="button" className="absolute inset-0" aria-label="Voltar" onClick={onClose} />
+      <div className="app-card relative z-10 w-full max-w-lg p-5">
+        <h3 className="font-display text-lg font-bold text-ink">Confirmar envio da campanha</h3>
+        <p className="mt-2 text-sm text-slate-500">Esta campanha será enviada para aproximadamente {currencyNumber(estimate)} contatos.</p>
+        <div className="mt-5 space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+          <div><strong className="text-ink">Campanha:</strong> {form.title}</div>
+          <div><strong className="text-ink">Público:</strong> {form.audienceMode === 'ALL' ? 'Toda a base' : form.segmentType === 'CITY' ? `Cidade: ${form.city}` : 'Líder selecionado'}</div>
+          <div><strong className="text-ink">Data:</strong> {form.scheduleMode === 'SCHEDULE' ? formatDateTime(form.scheduledAt) : 'Envio imediato'}</div>
+          <div><strong className="text-ink">Número:</strong> {channel?.phoneNumber ?? 'WhatsApp conectado'}</div>
+        </div>
+        <div className="mt-5 flex justify-end gap-3">
+          <button type="button" className="button-secondary" disabled={submitting} onClick={onClose}>Voltar</button>
+          <button type="button" className="button-primary" disabled={submitting} onClick={onConfirm}>
+            {submitting ? 'Confirmando...' : 'Confirmar campanha'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-slate-100" />)}
+      </div>
+      <div className="h-48 animate-pulse rounded-xl bg-slate-100" />
+      <div className="h-80 animate-pulse rounded-xl bg-slate-100" />
     </div>
   )
 }
 
 export function CommunicationsPage() {
   const queryClient = useQueryClient()
-  const [channelForm, setChannelForm] = useState({
-    name: '',
-    type: 'WHATSAPP',
-    mode: 'API',
-    providerName: '',
-    apiBaseUrl: '',
-    apiToken: '',
-    senderId: '',
-    phoneNumber: '',
-    isDefault: true,
-  })
-  const [campaignForm, setCampaignForm] = useState({
-    title: '',
-    subject: '',
-    body: '',
-    channelConfigId: '',
-    audienceType: 'ALL_SUPPORTERS',
-    city: '',
-    electoralZone: '',
-    leaderId: '',
-    scheduledAt: '',
-    notifyAllBase: true,
-  })
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<PendingCampaignAction>(null)
+  const [toast, setToast] = useState('')
+  const [campaignForm, setCampaignForm] = useState<CampaignFormState>(initialCampaignForm)
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(''), 2800)
+    return () => window.clearTimeout(timer)
+  }, [toast])
 
   const overviewQuery = useQuery({
     queryKey: ['communications'],
@@ -126,6 +611,7 @@ export function CommunicationsPage() {
       const response = await api.get<CommunicationsOverview>('/communications/overview')
       return response.data
     },
+    refetchInterval: qrModalOpen ? 5000 : false,
   })
 
   const leadersQuery = useQuery({
@@ -136,283 +622,213 @@ export function CommunicationsPage() {
     },
   })
 
-  const createChannelMutation = useMutation({
-    mutationFn: async () => api.post('/communications/channels', channelForm),
-    onSuccess: async () => {
-      setChannelForm({
-        name: '',
-        type: 'WHATSAPP',
-        mode: 'API',
-        providerName: '',
-        apiBaseUrl: '',
-        apiToken: '',
-        senderId: '',
-        phoneNumber: '',
-        isDefault: true,
-      })
-      await queryClient.invalidateQueries({ queryKey: ['communications'] })
+  const overview = overviewQuery.data
+  const whatsappChannel = useMemo(
+    () => overview?.channels.find((channel) => channel.type === 'WHATSAPP' && channel.mode === 'QR') ?? overview?.channels.find((channel) => channel.type === 'WHATSAPP'),
+    [overview?.channels],
+  )
+  const connectionStatus = whatsappChannel?.status ?? 'DISCONNECTED'
+  const connectionStyle = connectionStyles[connectionStatus]
+  const connected = ['CONNECTED', 'READY'].includes(connectionStatus)
+  const queuedCampaigns = overview?.campaigns.filter((campaign) => ['QUEUED', 'SCHEDULED', 'DRAFT'].includes(campaign.status)).length ?? 0
+
+  const estimateParams = useMemo(() => {
+    const audienceType: CampaignAudienceType = campaignForm.audienceMode === 'ALL'
+      ? 'ALL_SUPPORTERS'
+      : campaignForm.segmentType === 'CITY'
+        ? 'CITY'
+        : 'LEADER'
+    return {
+      audienceType,
+      city: audienceType === 'CITY' ? campaignForm.city : '',
+      leaderId: audienceType === 'LEADER' ? campaignForm.leaderId : '',
+    }
+  }, [campaignForm])
+
+  const estimateQuery = useQuery({
+    queryKey: ['communications-audience-estimate', estimateParams],
+    queryFn: async () => {
+      const response = await api.get<{ total: number }>('/communications/audience-estimate', { params: estimateParams })
+      return response.data.total
     },
-    onError: (error) => alert(getErrorMessage(error)),
+    enabled: Boolean(overview),
+  })
+
+  const ensureQrChannelMutation = useMutation({
+    mutationFn: async () => {
+      if (whatsappChannel) return whatsappChannel
+      const response = await api.post<{ channel: CommunicationChannel }>('/communications/channels/whatsapp-qr')
+      return response.data.channel
+    },
   })
 
   const refreshQrMutation = useMutation({
     mutationFn: async (channelId: string) => api.post(`/communications/channels/${channelId}/qrcode`),
     onSuccess: async () => {
+      setQrModalOpen(true)
+      await queryClient.invalidateQueries({ queryKey: ['communications'] })
+    },
+    onError: (error) => alert(getErrorMessage(error)),
+  })
+
+  const disconnectMutation = useMutation({
+    mutationFn: async (channelId: string) => api.post(`/communications/channels/${channelId}/disconnect`),
+    onSuccess: async () => {
+      setToast('Sessão do WhatsApp encerrada.')
       await queryClient.invalidateQueries({ queryKey: ['communications'] })
     },
     onError: (error) => alert(getErrorMessage(error)),
   })
 
   const createCampaignMutation = useMutation({
-    mutationFn: async () => api.post('/communications/campaigns', campaignForm),
-    onSuccess: async () => {
-      setCampaignForm({
-        title: '',
-        subject: '',
-        body: '',
-        channelConfigId: '',
-        audienceType: 'ALL_SUPPORTERS',
-        city: '',
-        electoralZone: '',
-        leaderId: '',
-        scheduledAt: '',
-        notifyAllBase: true,
+    mutationFn: async (action: Exclude<PendingCampaignAction, null>) => {
+      const audienceType: CampaignAudienceType = campaignForm.audienceMode === 'ALL'
+        ? 'ALL_SUPPORTERS'
+        : campaignForm.segmentType === 'CITY'
+          ? 'CITY'
+          : 'LEADER'
+
+      return api.post('/communications/campaigns', {
+        title: campaignForm.title,
+        subject: null,
+        body: campaignForm.body,
+        channelConfigId: whatsappChannel?.id,
+        audienceType,
+        city: audienceType === 'CITY' ? campaignForm.city : null,
+        electoralZone: null,
+        leaderId: audienceType === 'LEADER' ? campaignForm.leaderId : null,
+        scheduledAt: campaignForm.scheduleMode === 'SCHEDULE' ? campaignForm.scheduledAt : null,
+        notifyAllBase: false,
+        saveAsDraft: action === 'draft',
       })
+    },
+    onSuccess: async (_response, action) => {
+      setConfirmOpen(false)
+      setPendingAction(null)
+      setCampaignForm(initialCampaignForm)
+      setToast(action === 'draft' ? 'Rascunho salvo com sucesso.' : 'Campanha criada com sucesso.')
       await queryClient.invalidateQueries({ queryKey: ['communications'] })
-      alert('Campanha criada e fila de disparo preparada.')
     },
     onError: (error) => alert(getErrorMessage(error)),
   })
 
-  const markReadMutation = useMutation({
-    mutationFn: async (id: string) => api.patch(`/communications/inbox/${id}/read`),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['communications'] })
-    },
-  })
+  async function openQrFlow() {
+    try {
+      const channel = await ensureQrChannelMutation.mutateAsync()
+      await refreshQrMutation.mutateAsync(channel.id)
+      setQrModalOpen(true)
+    } catch (error) {
+      alert(getErrorMessage(error))
+    }
+  }
 
-  const overview = overviewQuery.data
-  const leaderOptions = leadersQuery.data ?? []
-  const defaultChannel = useMemo(
-    () => overview?.channels.find((channel) => channel.isDefault) ?? overview?.channels[0],
-    [overview],
-  )
+  function validateCampaign(action: Exclude<PendingCampaignAction, null>) {
+    if (campaignForm.title.trim().length < 3) return 'Informe o nome da campanha.'
+    if (campaignForm.body.trim().length < 10) return 'Digite a mensagem da campanha.'
+    if (campaignForm.body.length > messageLimit) return 'A mensagem ultrapassou o limite de caracteres.'
+    if (action !== 'draft' && !connected) return 'Conecte um número do WhatsApp antes de criar uma campanha.'
+    if (campaignForm.audienceMode === 'SEGMENT' && campaignForm.segmentType === 'CITY' && !campaignForm.city.trim()) return 'Informe a cidade do segmento.'
+    if (campaignForm.audienceMode === 'SEGMENT' && campaignForm.segmentType === 'LEADER' && !campaignForm.leaderId) return 'Selecione o líder do segmento.'
+    if (campaignForm.scheduleMode === 'SCHEDULE') {
+      if (!campaignForm.scheduledAt) return 'Informe data e horário para agendar.'
+      if (new Date(campaignForm.scheduledAt) <= new Date()) return 'Escolha uma data futura para agendar.'
+    }
+    if (action !== 'draft' && (estimateQuery.data ?? 0) <= 0) return 'Nenhum contato apto encontrado para o público selecionado.'
+    return null
+  }
 
-  if (!overview) {
-    return <div className="app-card p-8 text-slate-600">Carregando central de comunicação...</div>
+  function requestCampaignSubmit(action: Exclude<PendingCampaignAction, null>) {
+    const error = validateCampaign(action)
+    if (error) {
+      alert(error)
+      return
+    }
+
+    if (action === 'send' && campaignForm.audienceMode === 'ALL') {
+      setPendingAction(action)
+      setConfirmOpen(true)
+      return
+    }
+
+    createCampaignMutation.mutate(action)
+  }
+
+  if (overviewQuery.isLoading || !overview) {
+    return <LoadingSkeleton />
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="section-label">Disparo e relacionamento</div>
-        <h2 className="page-title mt-1">Central de comunicação</h2>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="page-title">WhatsApp Business</h2>
+          <p className="page-subtitle mt-1">Gerencie a conexão do número e envie campanhas para sua base.</p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-teal/20 bg-teal/5 px-3 py-2 text-xs font-semibold text-teal">
+          <ShieldCheck className="h-4 w-4" />
+          LGPD e auditoria ativas
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Canais ativos" value={overview.metrics.connectedChannels} icon={RadioTower} color="text-teal" bg="bg-teal/10" />
-        <StatCard label="Campanhas na fila" value={overview.metrics.queuedCampaigns} icon={Send} color="text-blue-600" bg="bg-blue-50" />
-        <StatCard label="Não lidas" value={overview.metrics.unreadInbox} icon={MessageSquareMore} color="text-amber" bg="bg-amber/10" />
-        <StatCard label="Alcance da base" value={overview.metrics.baseReach} icon={Users} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Status da conexão" value={connectionLabels[connectionStatus]} icon={connected ? CheckCircle2 : Smartphone} tone={`${connectionStyle.card} ${connectionStyle.icon}`} />
+        <StatCard title="Campanhas na fila" value={queuedCampaigns} icon={Send} tone="bg-blue-50 text-blue-600" />
+        <StatCard title="Não lidas" value={overview.metrics.unreadInbox} icon={MessageSquareMore} tone="bg-amber/10 text-amber" />
+        <StatCard title="Alcance da base" value={currencyNumber(overview.metrics.baseReach)} icon={Users} tone="bg-emerald-50 text-emerald-600" />
       </div>
 
-      <div className="app-card p-5">
-        <div className="section-label">Canal preferencial</div>
-        <h3 className="mt-1 font-display text-base font-bold text-ink">{defaultChannel?.name ?? 'Nenhum canal configurado'}</h3>
-        <div className="mt-2 text-sm text-slate-500">
-          {defaultChannel ? `${statusLabel(defaultChannel.type)} em modo ${statusLabel(defaultChannel.mode)}` : 'Configure um canal para iniciar os disparos.'}
+      <WhatsAppConnectionCard
+        channel={whatsappChannel}
+        refreshing={refreshQrMutation.isPending || ensureQrChannelMutation.isPending}
+        disconnecting={disconnectMutation.isPending}
+        onConnect={openQrFlow}
+        onDisconnect={() => {
+          if (!whatsappChannel) return
+          if (window.confirm(`Desconectar o número ${whatsappChannel.phoneNumber || whatsappChannel.senderId || 'WhatsApp Business'}?`)) {
+            disconnectMutation.mutate(whatsappChannel.id)
+          }
+        }}
+      />
+
+      <RecentCampaigns campaigns={overview.campaigns.filter((campaign) => campaign.channelType === 'WHATSAPP')} onCreate={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })} />
+
+      <NewCampaignForm
+        form={campaignForm}
+        leaders={leadersQuery.data ?? []}
+        estimate={estimateQuery.data}
+        connected={connected}
+        submitting={createCampaignMutation.isPending}
+        onChange={setCampaignForm}
+        onSubmit={requestCampaignSubmit}
+        onOpenQr={openQrFlow}
+      />
+
+      <WhatsAppQrModal
+        open={qrModalOpen}
+        channel={whatsappChannel}
+        refreshing={refreshQrMutation.isPending || ensureQrChannelMutation.isPending}
+        onRefresh={openQrFlow}
+        onClose={() => setQrModalOpen(false)}
+      />
+
+      <CampaignConfirmationModal
+        open={confirmOpen}
+        form={campaignForm}
+        channel={whatsappChannel}
+        estimate={estimateQuery.data ?? 0}
+        submitting={createCampaignMutation.isPending}
+        onClose={() => {
+          setConfirmOpen(false)
+          setPendingAction(null)
+        }}
+        onConfirm={() => createCampaignMutation.mutate(pendingAction ?? 'send')}
+      />
+
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-[60] rounded-xl border border-teal/20 bg-white px-4 py-3 text-sm font-semibold text-teal shadow-card-md">
+          {toast}
         </div>
-      </div>
-
-      <section className="space-y-6">
-        <div className="space-y-6">
-          <div className="app-card p-6">
-            <div className="mb-5 border-b border-slate-100 pb-4">
-              <div className="section-label">Conectores</div>
-              <h3 className="mt-1 font-display text-base font-bold text-ink">Canais configurados</h3>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {overview.channels.map((channel) => (
-                <ChannelCard key={channel.id} channel={channel} onRefreshQr={(id) => refreshQrMutation.mutate(id)} />
-              ))}
-            </div>
-          </div>
-
-          <div className="app-card p-6">
-            <div className="section-label">Fila de campanhas</div>
-            <h3 className="mt-1 font-display text-base font-bold text-ink">Disparos recentes</h3>
-            <div className="mt-5 space-y-3">
-              {overview.campaigns.map((campaign) => (
-                <div key={campaign.id} className="rounded-lg border border-slate-100 bg-slate-50 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-ink">{campaign.title}</div>
-                      <div className="mt-1 text-sm text-slate-500">
-                        {campaign.channelName} • {statusLabel(campaign.audienceType)} • {campaign.notifyAllBase ? 'Toda a base' : 'Segmentado'}
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{statusLabel(campaign.status)}</span>
-                  </div>
-                  <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
-                    <div>Destinatários: {campaign.recipientsCount}</div>
-                    <div>Entregues: {campaign.deliveredCount}</div>
-                    <div>Criada em: {formatDateTime(campaign.createdAt)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="app-card p-6">
-            <div className="section-label">Novo conector</div>
-            <h3 className="mt-1 font-display text-base font-bold text-ink">Preparar integração</h3>
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <Field label="Nome do canal">
-                <TextInput value={channelForm.name} onChange={(event) => setChannelForm((current) => ({ ...current, name: event.target.value }))} />
-              </Field>
-              <Field label="Tipo">
-                <SelectInput value={channelForm.type} onChange={(event) => setChannelForm((current) => ({ ...current, type: event.target.value as typeof current.type }))}>
-                  <option value="WHATSAPP">WhatsApp</option>
-                  <option value="SMS">SMS</option>
-                  <option value="EMAIL">E-mail</option>
-                </SelectInput>
-              </Field>
-              <Field label="Modo">
-                <SelectInput value={channelForm.mode} onChange={(event) => setChannelForm((current) => ({ ...current, mode: event.target.value as typeof current.mode }))}>
-                  <option value="API">API</option>
-                  <option value="QR">QR Code</option>
-                  <option value="MANUAL">Manual</option>
-                </SelectInput>
-              </Field>
-              <Field label="Fornecedor">
-                <TextInput value={channelForm.providerName} onChange={(event) => setChannelForm((current) => ({ ...current, providerName: event.target.value }))} />
-              </Field>
-              <Field label="Base URL / Host">
-                <TextInput value={channelForm.apiBaseUrl} onChange={(event) => setChannelForm((current) => ({ ...current, apiBaseUrl: event.target.value }))} />
-              </Field>
-              <Field label="Identificador / número">
-                <TextInput value={channelForm.senderId} onChange={(event) => setChannelForm((current) => ({ ...current, senderId: event.target.value }))} />
-              </Field>
-              <Field label="Token da API">
-                <TextInput value={channelForm.apiToken} onChange={(event) => setChannelForm((current) => ({ ...current, apiToken: event.target.value }))} />
-              </Field>
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <CheckboxInput checked={channelForm.isDefault} onChange={(event) => setChannelForm((current) => ({ ...current, isDefault: event.target.checked }))} />
-                <span className="text-sm font-medium text-slate-700">Definir como canal padrão</span>
-              </label>
-            </div>
-            <button type="button" className="button-primary mt-5 w-full" onClick={() => createChannelMutation.mutate()} disabled={createChannelMutation.isPending}>
-              {createChannelMutation.isPending ? 'Salvando...' : 'Adicionar canal'}
-            </button>
-          </div>
-
-          <div className="app-card p-6">
-            <div className="flex items-center gap-2 section-label">
-              <Send className="h-3.5 w-3.5" />
-              Nova comunicação
-            </div>
-            <h3 className="mt-1 font-display text-base font-bold text-ink">Notificar toda a base ou segmentar</h3>
-            <div className="mt-5 grid gap-4">
-              <Field label="Título">
-                <TextInput value={campaignForm.title} onChange={(event) => setCampaignForm((current) => ({ ...current, title: event.target.value }))} />
-              </Field>
-              <Field label="Assunto opcional">
-                <TextInput value={campaignForm.subject} onChange={(event) => setCampaignForm((current) => ({ ...current, subject: event.target.value }))} />
-              </Field>
-              <Field label="Mensagem">
-                <TextAreaInput value={campaignForm.body} onChange={(event) => setCampaignForm((current) => ({ ...current, body: event.target.value }))} />
-              </Field>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Field label="Canal">
-                  <SelectInput value={campaignForm.channelConfigId} onChange={(event) => setCampaignForm((current) => ({ ...current, channelConfigId: event.target.value }))}>
-                    <option value="">Selecione</option>
-                    {overview.channels.map((channel) => (
-                      <option key={channel.id} value={channel.id}>
-                        {channel.name}
-                      </option>
-                    ))}
-                  </SelectInput>
-                </Field>
-                <Field label="Público">
-                  <SelectInput value={campaignForm.audienceType} onChange={(event) => setCampaignForm((current) => ({ ...current, audienceType: event.target.value as typeof current.audienceType }))}>
-                    <option value="ALL_SUPPORTERS">Toda a base</option>
-                    <option value="CITY">Cidade</option>
-                    <option value="ELECTORAL_ZONE">Zona eleitoral</option>
-                    <option value="LEADER">Líder</option>
-                  </SelectInput>
-                </Field>
-                {campaignForm.audienceType === 'CITY' ? (
-                  <Field label="Cidade">
-                    <TextInput value={campaignForm.city} onChange={(event) => setCampaignForm((current) => ({ ...current, city: event.target.value }))} />
-                  </Field>
-                ) : null}
-                {campaignForm.audienceType === 'ELECTORAL_ZONE' ? (
-                  <Field label="Zona eleitoral">
-                    <TextInput value={campaignForm.electoralZone} onChange={(event) => setCampaignForm((current) => ({ ...current, electoralZone: event.target.value }))} />
-                  </Field>
-                ) : null}
-                {campaignForm.audienceType === 'LEADER' ? (
-                  <Field label="Líder">
-                    <SelectInput value={campaignForm.leaderId} onChange={(event) => setCampaignForm((current) => ({ ...current, leaderId: event.target.value }))}>
-                      <option value="">Selecione</option>
-                      {leaderOptions.map((leader) => (
-                        <option key={leader.id} value={leader.id}>
-                          {leader.name}
-                        </option>
-                      ))}
-                    </SelectInput>
-                  </Field>
-                ) : null}
-                <Field label="Agendar para">
-                  <TextInput type="datetime-local" value={campaignForm.scheduledAt} onChange={(event) => setCampaignForm((current) => ({ ...current, scheduledAt: event.target.value }))} />
-                </Field>
-              </div>
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <CheckboxInput checked={campaignForm.notifyAllBase} onChange={(event) => setCampaignForm((current) => ({ ...current, notifyAllBase: event.target.checked }))} />
-                <span className="text-sm font-medium text-slate-700">Marcar como comunicação para toda a base</span>
-              </label>
-            </div>
-            <button type="button" className="button-primary mt-5 w-full" onClick={() => createCampaignMutation.mutate()} disabled={createCampaignMutation.isPending}>
-              {createCampaignMutation.isPending ? 'Preparando fila...' : 'Criar campanha'}
-            </button>
-          </div>
-
-          <div className="app-card p-6">
-            <div className="flex items-center gap-2 section-label">
-              <MessageSquareMore className="h-3.5 w-3.5" />
-              Caixa de entrada
-            </div>
-            <h3 className="mt-1 font-display text-base font-bold text-ink">Respostas da base</h3>
-            <div className="mt-5 space-y-3">
-              {overview.inbox.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={`w-full rounded-lg border p-4 text-left transition ${item.readAt ? 'border-slate-100 bg-slate-50' : 'border-teal/20 bg-teal/5'}`}
-                  onClick={() => {
-                    if (!item.readAt) {
-                      markReadMutation.mutate(item.id)
-                    }
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-ink">{item.senderName}</div>
-                      <div className="text-sm text-slate-500">
-                        {item.senderAddress} • {statusLabel(item.channelType)}
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-500">{formatDateTime(item.receivedAt)}</div>
-                  </div>
-                  <div className="mt-3 text-sm text-slate-700">{item.body}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      )}
     </div>
   )
 }

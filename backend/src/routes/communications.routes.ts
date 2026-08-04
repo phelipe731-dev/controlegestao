@@ -28,13 +28,21 @@ const campaignPayloadSchema = z.object({
   title: z.string().min(3),
   subject: z.string().optional().nullable(),
   body: z.string().min(10),
-  channelConfigId: z.string().min(1),
+  channelConfigId: z.string().min(1).optional().nullable(),
   audienceType: z.enum(['ALL_SUPPORTERS', 'CITY', 'ELECTORAL_ZONE', 'LEADER']),
   city: z.string().optional().nullable(),
   electoralZone: z.string().optional().nullable(),
   leaderId: z.string().optional().nullable(),
   scheduledAt: z.string().optional().nullable(),
   notifyAllBase: z.boolean().default(false),
+  saveAsDraft: z.boolean().default(false),
+})
+
+const audienceEstimateSchema = z.object({
+  audienceType: z.enum(['ALL_SUPPORTERS', 'CITY', 'ELECTORAL_ZONE', 'LEADER']).default('ALL_SUPPORTERS'),
+  city: z.string().optional().nullable(),
+  electoralZone: z.string().optional().nullable(),
+  leaderId: z.string().optional().nullable(),
 })
 
 function campaignScope(user: NonNullable<Express.Request['user']>): Prisma.CommunicationCampaignWhereInput {
@@ -73,6 +81,40 @@ function inboxScope(user: NonNullable<Express.Request['user']>): Prisma.Communic
   }
 }
 
+function buildAudienceWhere(
+  user: NonNullable<Express.Request['user']>,
+  payload: z.infer<typeof audienceEstimateSchema>,
+): Prisma.SupporterWhereInput {
+  return payload.audienceType === 'ALL_SUPPORTERS'
+    ? supporterScope(user)
+    : {
+        ...supporterScope(user),
+        ...(payload.audienceType === 'CITY' ? { city: payload.city ?? undefined } : {}),
+        ...(payload.audienceType === 'ELECTORAL_ZONE' ? { electoralZone: payload.electoralZone ?? undefined } : {}),
+        ...(payload.audienceType === 'LEADER' ? { leaderId: payload.leaderId ?? undefined } : {}),
+      }
+}
+
+async function findWhatsAppQrChannel(channelId?: string | null) {
+  if (channelId) {
+    return prisma.communicationChannelConfig.findFirst({
+      where: {
+        id: channelId,
+        type: 'WHATSAPP',
+        mode: 'QR',
+      },
+    })
+  }
+
+  return prisma.communicationChannelConfig.findFirst({
+    where: {
+      type: 'WHATSAPP',
+      mode: 'QR',
+    },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+  })
+}
+
 communicationsRouter.get(
   '/overview',
   authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
@@ -108,7 +150,7 @@ communicationsRouter.get(
 
     response.json({
       metrics: {
-        connectedChannels: channels.filter((channel) => ['CONNECTED', 'READY'].includes(channel.status)).length,
+        connectedChannels: channels.filter((channel) => channel.type === 'WHATSAPP' && channel.mode === 'QR' && ['CONNECTED', 'READY'].includes(channel.status)).length,
         queuedCampaigns: campaigns.filter((campaign) => campaign.status === 'QUEUED').length,
         unreadInbox: inbox.filter((item) => !item.readAt).length,
         baseReach: supporterCount,
@@ -163,6 +205,19 @@ communicationsRouter.get(
   }),
 )
 
+communicationsRouter.get(
+  '/audience-estimate',
+  authorize('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (request, response) => {
+    const payload = audienceEstimateSchema.parse(request.query)
+    const total = await prisma.supporter.count({
+      where: buildAudienceWhere(request.user!, payload),
+    })
+
+    response.json({ total })
+  }),
+)
+
 communicationsRouter.post(
   '/channels',
   authorize('ADMIN'),
@@ -196,6 +251,49 @@ communicationsRouter.post(
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] ?? null,
       nextData: channel,
+    })
+
+    response.status(201).json({ channel })
+  }),
+)
+
+communicationsRouter.post(
+  '/channels/whatsapp-qr',
+  authorize('ADMIN'),
+  asyncHandler(async (request, response) => {
+    const existing = await findWhatsAppQrChannel()
+
+    if (existing) {
+      response.json({ channel: existing })
+      return
+    }
+
+    const channel = await prisma.communicationChannelConfig.create({
+      data: {
+        id: 'channel_whatsapp_qr_primary',
+        name: 'WhatsApp Business QR',
+        type: 'WHATSAPP',
+        mode: 'QR',
+        status: 'DRAFT',
+        phoneNumber: '(11) 99999-1000',
+        isDefault: true,
+      },
+    })
+
+    await writeAuditLog({
+      actorUserId: request.user!.id,
+      action: 'CREATE',
+      entityType: 'communication_channel',
+      entityId: channel.id,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      nextData: {
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+        mode: channel.mode,
+        status: channel.status,
+      },
     })
 
     response.status(201).json({ channel })
@@ -237,29 +335,67 @@ communicationsRouter.post(
 )
 
 communicationsRouter.post(
+  '/channels/:id/disconnect',
+  authorize('ADMIN'),
+  asyncHandler(async (request, response) => {
+    const channelId = String(request.params.id)
+    const channel = await prisma.communicationChannelConfig.findFirst({
+      where: {
+        id: channelId,
+        type: 'WHATSAPP',
+        mode: 'QR',
+      },
+    })
+
+    if (!channel) {
+      throw new HttpError(404, 'Canal de WhatsApp QR nao encontrado.')
+    }
+
+    const updated = await prisma.communicationChannelConfig.update({
+      where: { id: channelId },
+      data: {
+        status: 'DRAFT',
+        qrToken: null,
+        lastSyncAt: new Date(),
+      },
+    })
+
+    await writeAuditLog({
+      actorUserId: request.user!.id,
+      action: 'UPDATE',
+      entityType: 'communication_channel',
+      entityId: channel.id,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      previousData: { status: channel.status },
+      nextData: { status: updated.status },
+    })
+
+    response.json({ channel: updated })
+  }),
+)
+
+communicationsRouter.post(
   '/campaigns',
   authorize('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (request, response) => {
     const currentUser = request.user!
     const payload = campaignPayloadSchema.parse(request.body)
-
-    const channel = await prisma.communicationChannelConfig.findUnique({
-      where: { id: payload.channelConfigId },
-    })
+    const channel = await findWhatsAppQrChannel(payload.channelConfigId)
 
     if (!channel) {
-      throw new HttpError(404, 'Canal de comunicacao nao encontrado.')
+      throw new HttpError(404, 'Canal de WhatsApp Business nao encontrado.')
     }
 
-    const audienceWhere =
-      payload.audienceType === 'ALL_SUPPORTERS'
-        ? supporterScope(currentUser)
-        : {
-            ...supporterScope(currentUser),
-            ...(payload.audienceType === 'CITY' ? { city: payload.city ?? undefined } : {}),
-            ...(payload.audienceType === 'ELECTORAL_ZONE' ? { electoralZone: payload.electoralZone ?? undefined } : {}),
-            ...(payload.audienceType === 'LEADER' ? { leaderId: payload.leaderId ?? undefined } : {}),
-          }
+    if (!payload.saveAsDraft && !['CONNECTED', 'READY'].includes(channel.status)) {
+      throw new HttpError(400, 'Conecte um numero do WhatsApp antes de criar uma campanha.')
+    }
+
+    if (payload.scheduledAt && new Date(payload.scheduledAt) <= new Date()) {
+      throw new HttpError(400, 'Informe uma data futura para agendar a campanha.')
+    }
+
+    const audienceWhere = buildAudienceWhere(currentUser, payload)
 
     const audience = await prisma.supporter.findMany({
       where: audienceWhere,
@@ -268,7 +404,7 @@ communicationsRouter.post(
       },
     })
 
-    if (audience.length === 0) {
+    if (!payload.saveAsDraft && audience.length === 0) {
       throw new HttpError(400, 'Nenhum apoiador encontrado para o publico selecionado.')
     }
 
@@ -277,17 +413,17 @@ communicationsRouter.post(
         title: payload.title,
         subject: payload.subject || null,
         body: payload.body,
-        channelConfigId: payload.channelConfigId,
+        channelConfigId: channel.id,
         audienceType: payload.audienceType,
         city: payload.city || null,
         electoralZone: payload.electoralZone || null,
         leaderId: payload.leaderId || null,
         notifyAllBase: payload.notifyAllBase,
-        status: payload.scheduledAt ? 'SCHEDULED' : 'QUEUED',
+        status: payload.saveAsDraft ? 'DRAFT' : payload.scheduledAt ? 'SCHEDULED' : 'QUEUED',
         scheduledAt: payload.scheduledAt ? new Date(payload.scheduledAt) : null,
         createdByUserId: currentUser.id,
         recipients: {
-          create: audience.map((supporter) => ({
+          create: payload.saveAsDraft ? [] : audience.map((supporter) => ({
             supporterId: supporter.id,
             status: 'QUEUED',
           })),

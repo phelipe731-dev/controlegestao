@@ -12,10 +12,18 @@ type ReportFilters = {
   supervisorId: string
   city: string
   neighborhood: string
-  electoralZone: string
   periodStart: string
   periodEnd: string
   status: '' | SupporterStatus
+}
+
+type ReportOptions = {
+  cities: string[]
+  neighborhoods: string[]
+  pairs: Array<{
+    city: string
+    neighborhood: string
+  }>
 }
 
 export function ReportsPage() {
@@ -25,7 +33,6 @@ export function ReportsPage() {
     supervisorId: '',
     city: '',
     neighborhood: '',
-    electoralZone: '',
     periodStart: '',
     periodEnd: '',
     status: '',
@@ -47,6 +54,14 @@ export function ReportsPage() {
       return response.data.supervisors
     },
     enabled: user?.role === 'ADMIN',
+  })
+
+  const { data: options } = useQuery({
+    queryKey: ['supporter-report-options'],
+    queryFn: async () => {
+      const response = await api.get<ReportOptions>('/reports/supporters/options')
+      return response.data
+    },
   })
 
   const { data, isLoading } = useQuery({
@@ -74,6 +89,14 @@ export function ReportsPage() {
       alert(getErrorMessage(error, 'Não foi possível exportar o relatório.'))
     }
   }
+
+  const neighborhoodOptions = filters.city
+    ? (options?.pairs ?? [])
+      .filter((item) => item.city === filters.city)
+      .map((item) => item.neighborhood)
+    : options?.neighborhoods ?? []
+
+  const uniqueNeighborhoodOptions = Array.from(new Set(neighborhoodOptions))
 
   return (
     <div className="space-y-6">
@@ -119,13 +142,27 @@ export function ReportsPage() {
             </Field>
           ) : null}
           <Field label="Cidade">
-            <TextInput value={filters.city} onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value }))} />
+            <SelectInput
+              value={filters.city}
+              onChange={(event) => setFilters((current) => ({ ...current, city: event.target.value, neighborhood: '' }))}
+            >
+              <option value="">Todas</option>
+              {(options?.cities ?? []).map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </SelectInput>
           </Field>
           <Field label="Bairro">
-            <TextInput value={filters.neighborhood} onChange={(event) => setFilters((current) => ({ ...current, neighborhood: event.target.value }))} />
-          </Field>
-          <Field label="Zona eleitoral">
-            <TextInput value={filters.electoralZone} onChange={(event) => setFilters((current) => ({ ...current, electoralZone: event.target.value }))} />
+            <SelectInput value={filters.neighborhood} onChange={(event) => setFilters((current) => ({ ...current, neighborhood: event.target.value }))}>
+              <option value="">Todos</option>
+              {uniqueNeighborhoodOptions.map((neighborhood) => (
+                <option key={neighborhood} value={neighborhood}>
+                  {neighborhood}
+                </option>
+              ))}
+            </SelectInput>
           </Field>
           <Field label="Data inicial">
             <TextInput type="date" value={filters.periodStart} onChange={(event) => setFilters((current) => ({ ...current, periodStart: event.target.value }))} />
@@ -181,7 +218,6 @@ export function ReportsPage() {
                     <th>Nome</th>
                     <th>Cidade</th>
                     <th>Líder</th>
-                    <th>Zona</th>
                     <th>Cadastro</th>
                   </tr>
                 </thead>
@@ -197,9 +233,6 @@ export function ReportsPage() {
                         <div className="mt-0.5 text-xs text-slate-400">{supporter.neighborhood}</div>
                       </td>
                       <td className="text-sm text-ink">{supporter.leaderName}</td>
-                      <td className="text-sm">
-                        {supporter.electoralZone} / {supporter.electoralSection}
-                      </td>
                       <td className="text-xs text-slate-400">{formatDateTime(supporter.createdAt)}</td>
                     </tr>
                   ))}

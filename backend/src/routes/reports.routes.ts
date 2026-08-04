@@ -21,7 +21,6 @@ const querySchema = z.object({
   supervisorId: z.string().optional(),
   city: z.string().optional(),
   neighborhood: z.string().optional(),
-  electoralZone: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
   status: statusSchema.optional(),
@@ -32,10 +31,9 @@ function toReportRows(supporters: ReturnType<typeof serializeSupporter>[]) {
     Nome: supporter.fullName,
     CPF: supporter.cpf,
     Telefone: supporter.phone ?? '',
+    Endereco: supporter.fullAddress,
     Cidade: supporter.city,
     Bairro: supporter.neighborhood,
-    ZonaEleitoral: supporter.electoralZone,
-    SecaoEleitoral: supporter.electoralSection,
     Lider: supporter.leaderName,
     Supervisor: supporter.supervisorName ?? '',
     Status: supporter.status,
@@ -44,6 +42,38 @@ function toReportRows(supporters: ReturnType<typeof serializeSupporter>[]) {
     CadastradoEm: dayjs(supporter.createdAt).format('DD/MM/YYYY HH:mm'),
   }))
 }
+
+reportsRouter.get(
+  '/supporters/options',
+  authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
+  asyncHandler(async (request, response) => {
+    const rows = await prisma.supporter.findMany({
+      where: buildSupporterWhere(request.user!, {}),
+      select: {
+        city: true,
+        neighborhood: true,
+      },
+      distinct: ['city', 'neighborhood'],
+      orderBy: [
+        { city: 'asc' },
+        { neighborhood: 'asc' },
+      ],
+    })
+
+    const pairs = rows
+      .filter((item) => item.city?.trim() && item.neighborhood?.trim())
+      .map((item) => ({
+        city: item.city,
+        neighborhood: item.neighborhood,
+      }))
+
+    response.json({
+      cities: Array.from(new Set(pairs.map((item) => item.city))).sort((left, right) => left.localeCompare(right)),
+      neighborhoods: Array.from(new Set(pairs.map((item) => item.neighborhood))).sort((left, right) => left.localeCompare(right)),
+      pairs,
+    })
+  }),
+)
 
 reportsRouter.get(
   '/supporters',

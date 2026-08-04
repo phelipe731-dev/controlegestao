@@ -19,7 +19,18 @@ type DobradaLeaderFormValues = {
   neighborhood: string
   source: string
   notes: string
+  monthlyCost: string
   status: UserStatus
+}
+
+type DobradaSupporterFormValues = {
+  fullName: string
+  phone: string
+  birthDate: string
+  fullAddress: string
+  city: string
+  neighborhood: string
+  notes: string
 }
 
 type DobradaLeaderFilters = {
@@ -39,7 +50,18 @@ const initialFormValues: DobradaLeaderFormValues = {
   neighborhood: '',
   source: '',
   notes: '',
+  monthlyCost: '',
   status: 'ACTIVE',
+}
+
+const initialSupporterFormValues: DobradaSupporterFormValues = {
+  fullName: '',
+  phone: '',
+  birthDate: '',
+  fullAddress: '',
+  city: '',
+  neighborhood: '',
+  notes: '',
 }
 
 const initialFilters: DobradaLeaderFilters = {
@@ -53,9 +75,31 @@ function nullable(value?: string | null) {
   return value ?? ''
 }
 
+function centsToCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value / 100)
+}
+
+function centsToInput(value?: number | null) {
+  if (!value) {
+    return ''
+  }
+
+  return String(value / 100).replace('.', ',')
+}
+
+function currencyToCents(value: string) {
+  const normalized = value.replace(/\./g, '').replace(',', '.').trim()
+  const number = Number(normalized)
+  return Number.isFinite(number) && number > 0 ? Math.round(number * 100) : 0
+}
+
 function toPayload(values: DobradaLeaderFormValues) {
   return {
     ...values,
+    monthlyCostCents: currencyToCents(values.monthlyCost),
     cpf: values.cpf || null,
     phone: values.phone || null,
     email: values.email || null,
@@ -64,6 +108,7 @@ function toPayload(values: DobradaLeaderFormValues) {
     neighborhood: values.neighborhood || null,
     source: values.source || null,
     notes: values.notes || null,
+    monthlyCost: undefined,
   }
 }
 
@@ -78,6 +123,7 @@ function toFormValues(leader: DobradaPauloAlexandreLeader): DobradaLeaderFormVal
     neighborhood: nullable(leader.neighborhood),
     source: nullable(leader.source),
     notes: nullable(leader.notes),
+    monthlyCost: centsToInput(leader.monthlyCostCents),
     status: leader.status,
   }
 }
@@ -96,6 +142,10 @@ export function DobradaPauloAlexandrePage() {
 
   const editForm = useForm<DobradaLeaderFormValues>({
     defaultValues: initialFormValues,
+  })
+
+  const supporterForm = useForm<DobradaSupporterFormValues>({
+    defaultValues: initialSupporterFormValues,
   })
 
   const { data, isLoading } = useQuery({
@@ -152,6 +202,39 @@ export function DobradaPauloAlexandrePage() {
     onError: (error) => alert(getErrorMessage(error)),
   })
 
+  const createSupporterMutation = useMutation({
+    mutationFn: async (values: DobradaSupporterFormValues) => {
+      if (!editingLeader) {
+        throw new Error('Nenhuma liderança selecionada para cadastrar apoiador.')
+      }
+
+      await api.post(`/dobrada-paulo-alexandre/leaders/${editingLeader.id}/supporters`, {
+        ...values,
+        phone: values.phone || null,
+        birthDate: values.birthDate || null,
+        fullAddress: values.fullAddress || null,
+        city: values.city || null,
+        neighborhood: values.neighborhood || null,
+        notes: values.notes || null,
+      })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dobrada-paulo-alexandre-leaders'] })
+      supporterForm.reset(initialSupporterFormValues)
+    },
+    onError: (error) => alert(getErrorMessage(error)),
+  })
+
+  const deleteSupporterMutation = useMutation({
+    mutationFn: async ({ leaderId, supporterId }: { leaderId: string; supporterId: string }) => {
+      await api.delete(`/dobrada-paulo-alexandre/leaders/${leaderId}/supporters/${supporterId}`)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dobrada-paulo-alexandre-leaders'] })
+    },
+    onError: (error) => alert(getErrorMessage(error)),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: async (leaderId: string) => {
       await api.delete(`/dobrada-paulo-alexandre/leaders/${leaderId}`)
@@ -163,6 +246,9 @@ export function DobradaPauloAlexandrePage() {
   })
 
   const leaders = data?.leaders ?? []
+  const activeEditingLeader = editingLeader
+    ? leaders.find((leader) => leader.id === editingLeader.id) ?? editingLeader
+    : null
   const totalLeaders = data?.total ?? 0
   const totalPages = data?.totalPages ?? 1
   const activeFilters = Object.values(filters).filter(Boolean).length
@@ -236,6 +322,9 @@ export function DobradaPauloAlexandrePage() {
           </Field>
           <Field label="Origem">
             <TextInput {...createForm.register('source')} placeholder="Ex: reunião, indicação, bairro" />
+          </Field>
+          <Field label="Custo mensal da operação">
+            <TextInput {...createForm.register('monthlyCost')} placeholder="Ex: 500,00" />
           </Field>
           <Field label="Status">
             <SelectInput {...createForm.register('status')}>
@@ -345,6 +434,8 @@ export function DobradaPauloAlexandrePage() {
                     <div>Bairro: {leader.neighborhood ?? '-'}</div>
                     <div>CPF: {cpfMask(leader.cpf)}</div>
                     <div>Origem: {leader.source ?? '-'}</div>
+                    <div>Custo: {centsToCurrency(leader.monthlyCostCents)}</div>
+                    <div>Apoiadores: {leader.supportersCount}</div>
                   </div>
                   {leader.notes && <div className="mt-3 rounded-lg bg-white p-3 text-sm text-slate-600">{leader.notes}</div>}
                   <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -376,6 +467,7 @@ export function DobradaPauloAlexandrePage() {
                     <th>Liderança</th>
                     <th>Contato</th>
                     <th>Localidade</th>
+                    <th>Operação</th>
                     <th>Origem</th>
                     <th>Status</th>
                     <th>Atualizado</th>
@@ -396,6 +488,10 @@ export function DobradaPauloAlexandrePage() {
                       <td>
                         <div>{leader.city ?? '-'}</div>
                         <div className="mt-0.5 text-xs text-slate-400">{leader.neighborhood ?? '-'}</div>
+                      </td>
+                      <td>
+                        <div>{centsToCurrency(leader.monthlyCostCents)}</div>
+                        <div className="mt-0.5 text-xs text-slate-400">{leader.supportersCount} apoiadores</div>
                       </td>
                       <td>{leader.source ?? '-'}</td>
                       <td>
@@ -448,19 +544,19 @@ export function DobradaPauloAlexandrePage() {
         )}
       </div>
 
-      {editingLeader && (
+      {activeEditingLeader && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
           <form
-            className="app-card max-h-[88vh] w-full max-w-4xl overflow-hidden"
+            className="app-card max-h-[88vh] w-full max-w-5xl overflow-hidden"
             noValidate
             onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values), handleInvalidSubmit)}
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
               <div>
                 <div className="section-label">Editar liderança da dobrada</div>
-                <h3 className="mt-1 font-display text-lg font-bold text-ink">{editingLeader.fullName}</h3>
+                <h3 className="mt-1 font-display text-lg font-bold text-ink">{activeEditingLeader.fullName}</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Atualize os dados do cadastro selecionado sem sair da lista.
+                  Atualize os dados, custo mensal e apoiadores vinculados sem sair da lista.
                 </p>
               </div>
               <button
@@ -499,6 +595,9 @@ export function DobradaPauloAlexandrePage() {
                 <Field label="Origem">
                   <TextInput {...editForm.register('source')} />
                 </Field>
+                <Field label="Custo mensal da operação">
+                  <TextInput {...editForm.register('monthlyCost')} placeholder="Ex: 500,00" />
+                </Field>
                 <Field label="Status">
                   <SelectInput {...editForm.register('status')}>
                     <option value="ACTIVE">Ativo</option>
@@ -509,6 +608,90 @@ export function DobradaPauloAlexandrePage() {
                   <Field label="Observações">
                     <TextAreaInput {...editForm.register('notes')} placeholder="Anotações internas sobre a liderança da dobrada" />
                   </Field>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="section-label">Apoiadores vinculados</div>
+                    <h4 className="mt-1 font-display text-base font-bold text-ink">
+                      {activeEditingLeader.supportersCount} apoiador{activeEditingLeader.supportersCount !== 1 ? 'es' : ''}
+                    </h4>
+                  </div>
+                  <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                    Custo mensal: {centsToCurrency(currencyToCents(editForm.watch('monthlyCost')))}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <Field label="Nome do apoiador">
+                    <TextInput {...supporterForm.register('fullName', { required: true })} placeholder="Nome completo" />
+                  </Field>
+                  <Field label="Telefone">
+                    <TextInput {...supporterForm.register('phone')} placeholder="WhatsApp ou telefone" />
+                  </Field>
+                  <Field label="Data de nascimento">
+                    <TextInput type="date" {...supporterForm.register('birthDate')} />
+                  </Field>
+                  <Field label="Cidade">
+                    <TextInput {...supporterForm.register('city')} />
+                  </Field>
+                  <Field label="Bairro">
+                    <TextInput {...supporterForm.register('neighborhood')} />
+                  </Field>
+                  <div className="md:col-span-2">
+                    <Field label="Endereço">
+                      <TextInput {...supporterForm.register('fullAddress')} />
+                    </Field>
+                  </div>
+                  <div className="xl:col-span-4">
+                    <Field label="Observações">
+                      <TextAreaInput {...supporterForm.register('notes')} placeholder="Observações sobre o apoiador" />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="button-primary"
+                    disabled={createSupporterMutation.isPending}
+                    onClick={supporterForm.handleSubmit((values) => createSupporterMutation.mutate(values), () => alert('Informe o nome do apoiador.'))}
+                  >
+                    {createSupporterMutation.isPending ? 'Cadastrando...' : 'Cadastrar apoiador nesta liderança'}
+                  </button>
+                </div>
+
+                <div className="mt-5 space-y-2">
+                  {activeEditingLeader.supporters.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                      Nenhum apoiador cadastrado para esta liderança.
+                    </div>
+                  ) : (
+                    activeEditingLeader.supporters.map((supporter) => (
+                      <div key={supporter.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3">
+                        <div>
+                          <div className="font-semibold text-ink">{supporter.fullName}</div>
+                          <div className="text-xs text-slate-500">
+                            {supporter.phone ?? 'Sem telefone'} · {supporter.neighborhood ?? 'Sem bairro'} · {supporter.city ?? 'Sem cidade'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="button-ghost px-3 py-1.5 text-xs text-rose hover:bg-rose/10 hover:text-rose"
+                          onClick={() => {
+                            if (window.confirm(`Remover ${supporter.fullName} desta liderança?`)) {
+                              deleteSupporterMutation.mutate({ leaderId: activeEditingLeader.id, supporterId: supporter.id })
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remover
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

@@ -73,9 +73,27 @@ export type DobradaPauloAlexandreLeader = {
   neighborhood: string | null
   source: string | null
   notes: string | null
+  monthlyCostCents: number
   status: UserStatus
+  supportersCount: number
+  supporters: DobradaPauloAlexandreSupporter[]
   createdByUserName: string | null
   updatedByUserName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type DobradaPauloAlexandreSupporter = {
+  id: string
+  leaderId: string
+  fullName: string
+  phone: string | null
+  birthDate: string | null
+  fullAddress: string | null
+  city: string | null
+  neighborhood: string | null
+  notes: string | null
+  status: UserStatus
   createdAt: string
   updatedAt: string
 }

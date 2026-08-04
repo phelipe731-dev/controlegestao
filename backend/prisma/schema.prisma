@@ -177,7 +177,9 @@ model DobradaPauloAlexandreLeader {
   neighborhood    String?
   source          String?
   notes           String?
+  monthlyCostCents Int       @default(0)
   status          UserStatus @default(ACTIVE)
+  supporters       DobradaPauloAlexandreSupporter[]
   createdByUserId String?
   createdByUser   User?      @relation("DobradaPauloAlexandreLeaderCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   updatedByUserId String?
@@ -185,6 +187,30 @@ model DobradaPauloAlexandreLeader {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
+  @@index([fullName])
+  @@index([city])
+  @@index([neighborhood])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DobradaPauloAlexandreSupporter {
+  id              String     @id @default(cuid())
+  leaderId        String
+  leader          DobradaPauloAlexandreLeader @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+  fullName        String
+  phone           String?
+  phoneNormalized String?
+  birthDate       DateTime?
+  fullAddress     String?
+  city            String?
+  neighborhood    String?
+  notes           String?
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([leaderId])
   @@index([fullName])
   @@index([city])
   @@index([neighborhood])

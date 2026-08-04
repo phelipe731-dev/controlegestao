@@ -37,17 +37,58 @@ const payloadSchema = z.object({
   neighborhood: optionalPayloadString,
   source: optionalPayloadString,
   notes: optionalPayloadString,
+  monthlyCostCents: z.coerce.number().int().min(0).default(0),
+  status: statusSchema.default('ACTIVE'),
+})
+
+const supporterPayloadSchema = z.object({
+  fullName: z.string().trim().min(2),
+  phone: optionalPayloadString,
+  birthDate: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  fullAddress: optionalPayloadString,
+  city: optionalPayloadString,
+  neighborhood: optionalPayloadString,
+  notes: optionalPayloadString,
   status: statusSchema.default('ACTIVE'),
 })
 
 const leaderInclude = {
   createdByUser: true,
   updatedByUser: true,
+  supporters: {
+    orderBy: {
+      createdAt: 'desc',
+    },
+  },
+  _count: {
+    select: {
+      supporters: true,
+    },
+  },
 } satisfies Prisma.DobradaPauloAlexandreLeaderInclude
 
 type DobradaLeaderWithRelations = Prisma.DobradaPauloAlexandreLeaderGetPayload<{
   include: typeof leaderInclude
 }>
+
+type DobradaSupporter = Prisma.DobradaPauloAlexandreSupporterGetPayload<object>
+
+function serializeDobradaSupporter(item: DobradaSupporter) {
+  return {
+    id: item.id,
+    leaderId: item.leaderId,
+    fullName: item.fullName,
+    phone: item.phone,
+    birthDate: item.birthDate,
+    fullAddress: item.fullAddress,
+    city: item.city,
+    neighborhood: item.neighborhood,
+    notes: item.notes,
+    status: item.status,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }
+}
 
 function serializeDobradaLeader(item: DobradaLeaderWithRelations) {
   return {
@@ -61,7 +102,10 @@ function serializeDobradaLeader(item: DobradaLeaderWithRelations) {
     neighborhood: item.neighborhood,
     source: item.source,
     notes: item.notes,
+    monthlyCostCents: item.monthlyCostCents,
     status: item.status,
+    supportersCount: item._count.supporters,
+    supporters: item.supporters.map(serializeDobradaSupporter),
     createdByUserName: item.createdByUser?.name ?? null,
     updatedByUserName: item.updatedByUser?.name ?? null,
     createdAt: item.createdAt,
@@ -122,6 +166,21 @@ function buildData(payload: z.infer<typeof payloadSchema>) {
     city: payload.city?.trim() || null,
     neighborhood: payload.neighborhood?.trim() || null,
     source: payload.source?.trim() || null,
+    notes: payload.notes?.trim() || null,
+    monthlyCostCents: payload.monthlyCostCents,
+    status: payload.status,
+  }
+}
+
+function buildSupporterData(payload: z.infer<typeof supporterPayloadSchema>) {
+  return {
+    fullName: normalizeText(payload.fullName),
+    phone: payload.phone?.trim() || null,
+    phoneNormalized: normalizeOptionalDigits(payload.phone),
+    birthDate: payload.birthDate ? new Date(payload.birthDate) : null,
+    fullAddress: payload.fullAddress?.trim() || null,
+    city: payload.city?.trim() || null,
+    neighborhood: payload.neighborhood?.trim() || null,
     notes: payload.notes?.trim() || null,
     status: payload.status,
   }
@@ -223,6 +282,118 @@ dobradaPauloAlexandreRouter.put(
     response.json({
       leader: serializeDobradaLeader(updated),
     })
+  }),
+)
+
+dobradaPauloAlexandreRouter.post(
+  '/leaders/:leaderId/supporters',
+  authorize('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (request, response) => {
+    const leaderId = String(request.params.leaderId)
+    const leader = await prisma.dobradaPauloAlexandreLeader.findUnique({
+      where: { id: leaderId },
+    })
+
+    if (!leader) {
+      throw new HttpError(404, 'Lideranca da dobrada nao encontrada.')
+    }
+
+    const payload = supporterPayloadSchema.parse(request.body)
+    const supporter = await prisma.dobradaPauloAlexandreSupporter.create({
+      data: {
+        ...buildSupporterData(payload),
+        leaderId,
+      },
+    })
+
+    await writeAuditLog({
+      actorUserId: request.user!.id,
+      action: 'CREATE',
+      entityType: 'dobrada_paulo_alexandre_supporter',
+      entityId: supporter.id,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      nextData: serializeDobradaSupporter(supporter),
+    })
+
+    response.status(201).json({
+      supporter: serializeDobradaSupporter(supporter),
+    })
+  }),
+)
+
+dobradaPauloAlexandreRouter.put(
+  '/leaders/:leaderId/supporters/:supporterId',
+  authorize('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (request, response) => {
+    const leaderId = String(request.params.leaderId)
+    const supporterId = String(request.params.supporterId)
+    const existing = await prisma.dobradaPauloAlexandreSupporter.findFirst({
+      where: {
+        id: supporterId,
+        leaderId,
+      },
+    })
+
+    if (!existing) {
+      throw new HttpError(404, 'Apoiador da dobrada nao encontrado.')
+    }
+
+    const payload = supporterPayloadSchema.parse(request.body)
+    const supporter = await prisma.dobradaPauloAlexandreSupporter.update({
+      where: { id: supporterId },
+      data: buildSupporterData(payload),
+    })
+
+    await writeAuditLog({
+      actorUserId: request.user!.id,
+      action: 'UPDATE',
+      entityType: 'dobrada_paulo_alexandre_supporter',
+      entityId: supporter.id,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      previousData: serializeDobradaSupporter(existing),
+      nextData: serializeDobradaSupporter(supporter),
+    })
+
+    response.json({
+      supporter: serializeDobradaSupporter(supporter),
+    })
+  }),
+)
+
+dobradaPauloAlexandreRouter.delete(
+  '/leaders/:leaderId/supporters/:supporterId',
+  authorize('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (request, response) => {
+    const leaderId = String(request.params.leaderId)
+    const supporterId = String(request.params.supporterId)
+    const existing = await prisma.dobradaPauloAlexandreSupporter.findFirst({
+      where: {
+        id: supporterId,
+        leaderId,
+      },
+    })
+
+    if (!existing) {
+      throw new HttpError(404, 'Apoiador da dobrada nao encontrado.')
+    }
+
+    await prisma.dobradaPauloAlexandreSupporter.delete({
+      where: { id: supporterId },
+    })
+
+    await writeAuditLog({
+      actorUserId: request.user!.id,
+      action: 'DELETE',
+      entityType: 'dobrada_paulo_alexandre_supporter',
+      entityId: supporterId,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      previousData: serializeDobradaSupporter(existing),
+    })
+
+    response.status(204).send()
   }),
 )
 

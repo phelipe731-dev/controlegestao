@@ -42,6 +42,8 @@ type CampaignFormState = {
   city: string
   leaderId: string
   manualRecipients: string
+  manualRecipientName: string
+  manualRecipientPhone: string
   scheduleMode: 'NOW' | 'SCHEDULE'
   scheduledAt: string
 }
@@ -56,6 +58,8 @@ const initialCampaignForm: CampaignFormState = {
   city: '',
   leaderId: '',
   manualRecipients: '',
+  manualRecipientName: '',
+  manualRecipientPhone: '',
   scheduleMode: 'NOW',
   scheduledAt: '',
 }
@@ -98,6 +102,10 @@ function parseManualRecipients(value: string) {
       return { phone, name: name || null }
     })
     .filter((recipient, index, recipients) => recipient.phone.length >= 10 && recipients.findIndex((item) => item.phone === recipient.phone) === index)
+}
+
+function formatManualRecipientLine(phone: string, name?: string | null) {
+  return [phone.replace(/\D/g, ''), name?.trim()].filter(Boolean).join(' ')
 }
 
 function currencyNumber(value: number) {
@@ -490,7 +498,40 @@ function NewCampaignForm({
 }) {
   const charsLeft = messageLimit - form.body.length
   const isScheduled = form.scheduleMode === 'SCHEDULE'
-  const manualRecipientsCount = parseManualRecipients(form.manualRecipients).length
+  const manualRecipients = parseManualRecipients(form.manualRecipients)
+  const manualRecipientsCount = manualRecipients.length
+
+  function addManualRecipient() {
+    const phone = form.manualRecipientPhone.replace(/\D/g, '')
+    const name = form.manualRecipientName.trim()
+
+    if (phone.length < 10) {
+      alert('Informe um telefone válido com DDD.')
+      return
+    }
+
+    if (manualRecipients.some((recipient) => recipient.phone === phone)) {
+      alert('Este telefone já está na lista.')
+      return
+    }
+
+    onChange({
+      ...form,
+      manualRecipients: [...form.manualRecipients.split(/\r?\n/).filter(Boolean), formatManualRecipientLine(phone, name)].join('\n'),
+      manualRecipientName: '',
+      manualRecipientPhone: '',
+    })
+  }
+
+  function removeManualRecipient(phone: string) {
+    onChange({
+      ...form,
+      manualRecipients: manualRecipients
+        .filter((recipient) => recipient.phone !== phone)
+        .map((recipient) => formatManualRecipientLine(recipient.phone, recipient.name))
+        .join('\n'),
+    })
+  }
 
   return (
     <section className="app-card p-5 sm:p-6">
@@ -533,7 +574,7 @@ function NewCampaignForm({
           <div className="section-label">Público</div>
           <RadioCard active={form.audienceMode === 'ALL'} title="Toda a base" description="Enviar para todos os contatos aptos da sua base." onClick={() => onChange({ ...form, audienceMode: 'ALL' })} />
           <RadioCard active={form.audienceMode === 'SEGMENT'} title="Segmento específico" description="Escolha filtros para enviar somente para parte da sua base." onClick={() => onChange({ ...form, audienceMode: 'SEGMENT' })} />
-          <RadioCard active={form.audienceMode === 'MANUAL'} title="Lista manual" description="Cole telefones avulsos sem precisar cadastrar apoiadores." onClick={() => onChange({ ...form, audienceMode: 'MANUAL' })} />
+          <RadioCard active={form.audienceMode === 'MANUAL'} title="Lista manual" description="Adicione um nome e telefone por vez, sem cadastrar apoiador." onClick={() => onChange({ ...form, audienceMode: 'MANUAL' })} />
           {form.audienceMode === 'SEGMENT' ? (
             <div className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
               <Field label="Filtro">
@@ -557,13 +598,39 @@ function NewCampaignForm({
             </div>
           ) : null}
           {form.audienceMode === 'MANUAL' ? (
-            <Field label="Telefones">
-              <TextAreaInput
-                value={form.manualRecipients}
-                onChange={(event) => onChange({ ...form, manualRecipients: event.target.value })}
-                placeholder={'Um telefone por linha. Ex.:\n5513999999999\n(13) 98888-7777 Maria'}
-              />
-            </Field>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <div className="grid gap-3 md:grid-cols-[1fr,180px,auto]">
+                <Field label="Nome">
+                  <TextInput value={form.manualRecipientName} onChange={(event) => onChange({ ...form, manualRecipientName: event.target.value })} placeholder="Ex.: Maria Silva" />
+                </Field>
+                <Field label="Telefone">
+                  <TextInput value={form.manualRecipientPhone} onChange={(event) => onChange({ ...form, manualRecipientPhone: event.target.value })} placeholder="(13) 99999-9999" />
+                </Field>
+                <div className="flex items-end">
+                  <button type="button" className="button-primary w-full justify-center md:w-auto" onClick={addManualRecipient}>
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {manualRecipients.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
+                    Nenhum telefone adicionado ainda.
+                  </div>
+                ) : manualRecipients.map((recipient) => (
+                  <div key={recipient.phone} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-ink">{recipient.name || 'Sem nome'}</div>
+                      <div className="text-xs text-slate-500">{recipient.phone}</div>
+                    </div>
+                    <button type="button" className="button-ghost px-2.5 py-1.5 text-rose" onClick={() => removeManualRecipient(recipient.phone)}>
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : null}
           <div className="rounded-xl border border-teal/10 bg-teal/5 p-3 text-sm text-teal">
             Público estimado: <strong>{form.audienceMode === 'MANUAL' ? `${currencyNumber(manualRecipientsCount)} telefones válidos` : estimate === undefined ? 'calculando...' : `${currencyNumber(estimate)} contatos aptos`}</strong>
@@ -633,7 +700,7 @@ function CampaignConfirmationModal({
         <p className="mt-2 text-sm text-slate-500">Esta campanha será enviada para aproximadamente {currencyNumber(estimate)} contatos.</p>
         <div className="mt-5 space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
           <div><strong className="text-ink">Campanha:</strong> {form.title}</div>
-          <div><strong className="text-ink">Público:</strong> {form.audienceMode === 'ALL' ? 'Toda a base' : form.segmentType === 'CITY' ? `Cidade: ${form.city}` : 'Líder selecionado'}</div>
+          <div><strong className="text-ink">Público:</strong> {form.audienceMode === 'ALL' ? 'Toda a base' : form.audienceMode === 'MANUAL' ? `${parseManualRecipients(form.manualRecipients).length} telefones da lista manual` : form.segmentType === 'CITY' ? `Cidade: ${form.city}` : 'Líder selecionado'}</div>
           <div><strong className="text-ink">Data:</strong> {form.scheduleMode === 'SCHEDULE' ? formatDateTime(form.scheduledAt) : 'Envio imediato'}</div>
           <div><strong className="text-ink">Número:</strong> {channel?.phoneNumber ?? 'WhatsApp conectado'}</div>
         </div>
@@ -657,12 +724,8 @@ function CampaignFormModal({
   children: ReactNode
   onClose: () => void
 }) {
-  const modalRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!open) return
-    const previousFocus = document.activeElement as HTMLElement | null
-    window.setTimeout(() => modalRef.current?.focus(), 0)
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose()
@@ -671,7 +734,6 @@ function CampaignFormModal({
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
-      previousFocus?.focus()
     }
   }, [onClose, open])
 
@@ -680,7 +742,7 @@ function CampaignFormModal({
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
       <button type="button" className="absolute inset-0" aria-label="Fechar nova campanha" onClick={onClose} />
-      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Nova campanha" className="relative z-10 max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl outline-none">
+      <div role="dialog" aria-modal="true" aria-label="Nova campanha" className="relative z-10 max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl outline-none">
         <button type="button" className="absolute right-4 top-4 z-20 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-ink" aria-label="Fechar modal" onClick={onClose}>
           <X className="h-5 w-5" />
         </button>

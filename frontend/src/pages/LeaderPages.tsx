@@ -45,6 +45,14 @@ const initialValues: LeaderFormValues = {
   password: '',
 }
 
+function isTechnicalEmail(value?: string | null) {
+  return Boolean(value?.startsWith('lider-auto-') && value.endsWith('@campanhahub.local'))
+}
+
+function isTechnicalCpf(value?: string | null) {
+  return Boolean(value?.startsWith('AUTOCPF-'))
+}
+
 export function LeaderListPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -240,7 +248,7 @@ export function LeaderListPage() {
                   <tr key={leader.id}>
                     <td>
                       <div className="font-medium text-ink">{leader.name}</div>
-                      <div className="mt-0.5 text-xs text-slate-400">{leader.email}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">{isTechnicalEmail(leader.email) ? 'Sem e-mail cadastrado' : leader.email}</div>
                     </td>
                     <td>{leader.supervisorName ?? '—'}</td>
                     <td>{leader.supportersCount}</td>
@@ -323,9 +331,9 @@ export function LeaderFormPage() {
 
     form.reset({
       name: leaderData.name,
-      cpf: leaderData.cpf,
+      cpf: isTechnicalCpf(leaderData.cpf) ? '' : leaderData.cpf,
       phone: leaderData.phone ?? '',
-      email: leaderData.email,
+      email: isTechnicalEmail(leaderData.email) ? '' : leaderData.email,
       fullAddress: leaderData.fullAddress ?? '',
       city: leaderData.city ?? '',
       neighborhood: leaderData.neighborhood ?? '',
@@ -392,14 +400,14 @@ export function LeaderFormPage() {
             <Field label="Nome completo">
               <TextInput {...form.register('name', { required: true })} />
             </Field>
-            <Field label="CPF">
-              <TextInput {...form.register('cpf', { required: true })} />
+            <Field label="CPF (opcional)">
+              <TextInput {...form.register('cpf')} />
             </Field>
-            <Field label="E-mail">
-              <TextInput type="email" {...form.register('email', { required: true })} />
+            <Field label="E-mail (opcional)">
+              <TextInput type="email" {...form.register('email')} />
             </Field>
-            <Field label={isEdit ? 'Nova senha (opcional)' : 'Senha inicial'}>
-              <TextInput type="password" {...form.register('password', { required: !isEdit })} />
+            <Field label={isEdit ? 'Nova senha (opcional)' : 'Senha inicial (opcional)'}>
+              <TextInput type="password" {...form.register('password')} placeholder={isEdit ? 'Preencha apenas se quiser trocar' : 'Opcional'} />
             </Field>
           </div>
         </div>
@@ -413,8 +421,8 @@ export function LeaderFormPage() {
             <Field label="Telefone">
               <TextInput {...form.register('phone')} />
             </Field>
-            <Field label="Endereço completo">
-              <TextInput {...form.register('fullAddress', { required: true })} />
+            <Field label="Endereço completo (opcional)">
+              <TextInput {...form.register('fullAddress')} />
             </Field>
             <Field label="Cidade">
               <TextInput {...form.register('city', { required: true })} />

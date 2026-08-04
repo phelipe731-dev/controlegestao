@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import { z } from 'zod'
 import { authenticate, authorize } from '../middleware/auth.js'
@@ -19,6 +20,9 @@ leadersRouter.use(authenticate)
 const statusSchema = z.enum(['ACTIVE', 'INACTIVE'])
 const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
 const optionalQueryString = z.preprocess(emptyToUndefined, z.string().optional())
+const optionalBodyString = z.string().optional().nullable()
+const optionalEmail = z.preprocess(emptyToUndefined, z.string().email().optional())
+const optionalPassword = z.preprocess(emptyToUndefined, z.string().min(8).optional())
 
 const leaderQuerySchema = z.object({
   search: optionalQueryString,
@@ -30,19 +34,19 @@ const leaderQuerySchema = z.object({
 
 const leaderCreateSchema = z.object({
   name: z.string().min(3),
-  cpf: z.string().min(11),
-  phone: z.string().optional().nullable(),
-  email: z.string().email(),
-  fullAddress: z.string().min(3),
+  cpf: optionalBodyString,
+  phone: optionalBodyString,
+  email: optionalEmail,
+  fullAddress: optionalBodyString,
   city: z.string().min(2),
   neighborhood: z.string().min(2),
   supervisorId: z.string().optional().nullable(),
   status: statusSchema.default('ACTIVE'),
-  password: z.string().min(8),
+  password: optionalPassword,
 })
 
 const leaderUpdateSchema = leaderCreateSchema.extend({
-  password: z.string().min(8).optional(),
+  password: optionalPassword,
 })
 
 function ensureLeaderWritePermission(role: string, canCreateLeaders: boolean) {
@@ -55,6 +59,24 @@ function ensureLeaderWritePermission(role: string, canCreateLeaders: boolean) {
   }
 
   throw new HttpError(403, 'Voce nao possui permissao para gerenciar lideres.')
+}
+
+function makeTechnicalEmail() {
+  return `lider-auto-${randomUUID()}@campanhahub.local`
+}
+
+function makeTechnicalCpf() {
+  return `AUTOCPF-${randomUUID()}`
+}
+
+function normalizeManualCpf(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed || trimmed.startsWith('AUTOCPF-')) {
+    return null
+  }
+
+  const digits = trimmed.replace(/\D/g, '')
+  return digits.length > 0 ? digits : null
 }
 
 leadersRouter.get(
@@ -128,8 +150,8 @@ leadersRouter.post(
     ensureLeaderWritePermission(currentUser.role.name, currentUser.supervisorProfile?.canCreateLeaders ?? false)
 
     const payload = leaderCreateSchema.parse(request.body)
-    const email = normalizeEmail(payload.email)
-    const cpf = payload.cpf.replace(/\D/g, '')
+    const email = payload.email ? normalizeEmail(payload.email) : makeTechnicalEmail()
+    const cpf = normalizeManualCpf(payload.cpf) ?? makeTechnicalCpf()
     const phoneNormalized = normalizeOptionalDigits(payload.phone)
 
     await ensureUniqueUserFields({
@@ -160,7 +182,7 @@ leadersRouter.post(
       supervisorId = currentUser.supervisorProfile.id
     }
 
-    const passwordHash = await bcrypt.hash(payload.password, 10)
+    const passwordHash = await bcrypt.hash(payload.password ?? randomUUID(), 10)
 
     const leader = await prisma.$transaction(async (transaction) => {
       const user = await transaction.user.create({
@@ -173,7 +195,7 @@ leadersRouter.post(
           phoneNormalized,
           passwordHash,
           status: payload.status,
-          fullAddress: payload.fullAddress.trim(),
+          fullAddress: payload.fullAddress?.trim() || null,
           city: payload.city.trim(),
           neighborhood: payload.neighborhood.trim(),
         },
@@ -224,8 +246,8 @@ leadersRouter.put(
     }
 
     const payload = leaderUpdateSchema.parse(request.body)
-    const email = normalizeEmail(payload.email)
-    const cpf = payload.cpf.replace(/\D/g, '')
+    const email = payload.email ? normalizeEmail(payload.email) : existing.user.email
+    const cpf = normalizeManualCpf(payload.cpf) ?? existing.user.cpf
     const phoneNormalized = normalizeOptionalDigits(payload.phone)
 
     await ensureUniqueUserFields({
@@ -255,7 +277,7 @@ leadersRouter.put(
           phone: payload.phone?.trim() || null,
           phoneNormalized,
           status: payload.status,
-          fullAddress: payload.fullAddress.trim(),
+          fullAddress: payload.fullAddress?.trim() || null,
           city: payload.city.trim(),
           neighborhood: payload.neighborhood.trim(),
           ...(payload.password ? { passwordHash: await bcrypt.hash(payload.password, 10) } : {}),

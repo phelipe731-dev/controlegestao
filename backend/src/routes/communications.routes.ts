@@ -102,6 +102,12 @@ const audienceEstimateSchema = z.object({
   leaderId: z.string().optional().nullable(),
 })
 
+const testMessageSchema = z.object({
+  phone: z.string().min(8),
+  name: z.string().optional().nullable(),
+  body: z.string().min(1).max(1024),
+})
+
 function campaignScope(user: NonNullable<Express.Request['user']>): Prisma.CommunicationCampaignWhereInput {
   switch (user.role.name) {
     case 'ADMIN':
@@ -358,6 +364,41 @@ communicationsRouter.get(
     })
 
     response.json({ total })
+  }),
+)
+
+communicationsRouter.post(
+  '/test-message',
+  authorize('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (request, response) => {
+    const payload = testMessageSchema.parse(request.body)
+    const channel = await syncWhatsAppQrChannel()
+
+    if (!isWahaConfigured()) {
+      throw new HttpError(400, 'Configure o WAHA antes de enviar testes.')
+    }
+
+    if (!channel || !['CONNECTED', 'READY'].includes(channel.status)) {
+      throw new HttpError(400, 'Conecte um numero do WhatsApp antes de enviar teste.')
+    }
+
+    const result = await sendWahaTextMessage(payload.phone, payload.body)
+
+    await writeAuditLog({
+      actorUserId: request.user!.id,
+      action: 'CREATE',
+      entityType: 'communication_test_message',
+      entityId: channel.id,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+      nextData: {
+        phone: payload.phone.replace(/\d(?=\d{4})/g, '*'),
+        name: payload.name,
+        channelId: channel.id,
+      },
+    })
+
+    response.json({ ok: true, result })
   }),
 )
 

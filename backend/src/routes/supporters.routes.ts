@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
@@ -6,7 +7,7 @@ import { asyncHandler } from '../utils/async-handler.js'
 import { writeAuditLog } from '../utils/audit.js'
 import { findSupporterConflict } from '../utils/conflicts.js'
 import { HttpError } from '../utils/http-error.js'
-import { buildFullAddress, normalizeOptionalDigits, normalizeText } from '../utils/normalizers.js'
+import { normalizeOptionalDigits, normalizeText } from '../utils/normalizers.js'
 import { serializeSupporter, supporterListInclude } from '../utils/serializers.js'
 import { buildSupporterWhere } from '../utils/supporter-filters.js'
 import { supporterScope } from '../utils/scopes.js'
@@ -19,22 +20,24 @@ const consentSourceSchema = z.enum(['WEB_FORM', 'PRESENTIAL', 'EVENT', 'WHATSAPP
 const supporterStatusSchema = z.enum(['ACTIVE', 'ARCHIVED', 'ANONYMIZED'])
 const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value)
 const optionalQueryString = z.preprocess(emptyToUndefined, z.string().optional())
+const optionalBodyString = z.string().optional().nullable()
 
 const supporterPayloadSchema = z.object({
   fullName: z.string().min(3),
-  cpf: z.string().min(11),
-  phone: z.string().optional().nullable(),
+  fullAddress: z.string().min(5),
+  cpf: optionalBodyString,
+  phone: z.string().min(8),
   birthDate: z.string().min(10),
-  postalCode: z.string().min(8),
-  street: z.string().min(2),
-  number: z.string().min(1),
-  complement: z.string().optional().nullable(),
-  neighborhood: z.string().min(2),
-  city: z.string().min(2),
-  state: z.string().min(2).max(2),
-  voterRegistration: z.string().min(6),
-  electoralZone: z.string().min(1),
-  electoralSection: z.string().min(1),
+  postalCode: optionalBodyString,
+  street: optionalBodyString,
+  number: optionalBodyString,
+  complement: optionalBodyString,
+  neighborhood: optionalBodyString,
+  city: optionalBodyString,
+  state: optionalBodyString,
+  voterRegistration: optionalBodyString,
+  electoralZone: optionalBodyString,
+  electoralSection: optionalBodyString,
   leaderId: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   consentAccepted: z.boolean(),
@@ -101,6 +104,36 @@ function conflictMessage(conflict: Awaited<ReturnType<typeof findSupporterConfli
   }
 
   return { message: 'Ja existe um apoiador cadastrado com este telefone.' }
+}
+
+function makeTechnicalIdentifier(prefix: string) {
+  return `${prefix}-${randomUUID()}`
+}
+
+function normalizeManualDigits(value?: string | null, autoPrefix?: string) {
+  const trimmed = value?.trim()
+  if (!trimmed || (autoPrefix && trimmed.startsWith(`${autoPrefix}-`))) {
+    return null
+  }
+
+  const digits = trimmed.replace(/\D/g, '')
+  return digits.length > 0 ? digits : null
+}
+
+function supporterAddress(payload: z.infer<typeof supporterPayloadSchema>) {
+  const fullAddress = payload.fullAddress.trim()
+  const state = (payload.state?.trim() || 'SP').slice(0, 2).toUpperCase()
+
+  return {
+    fullAddress,
+    postalCode: payload.postalCode?.trim() || '00000000',
+    street: payload.street?.trim() || fullAddress,
+    number: payload.number?.trim() || 'S/N',
+    complement: payload.complement?.trim() || null,
+    neighborhood: payload.neighborhood?.trim() || 'Nao informado',
+    city: payload.city?.trim() || 'Nao informada',
+    state,
+  }
 }
 
 supportersRouter.get(
@@ -175,10 +208,18 @@ supportersRouter.post(
       throw new HttpError(404, 'Lider responsavel nao encontrado.')
     }
 
+    const cpf = normalizeManualDigits(payload.cpf, 'AUTOCPF')
+    const voterRegistration = normalizeManualDigits(payload.voterRegistration, 'AUTOTIT')
+    const phoneNormalized = normalizeOptionalDigits(payload.phone)
+
+    if (!phoneNormalized) {
+      throw new HttpError(400, 'Informe o telefone do apoiador.')
+    }
+
     const conflict = await findSupporterConflict({
-      cpf: payload.cpf.replace(/\D/g, ''),
-      phoneNormalized: normalizeOptionalDigits(payload.phone),
-      voterRegistration: payload.voterRegistration.replace(/\D/g, ''),
+      cpf,
+      phoneNormalized,
+      voterRegistration,
     })
 
     const message = conflictMessage(conflict, leaderId)
@@ -186,34 +227,27 @@ supportersRouter.post(
       throw new HttpError(409, message.message, message.details)
     }
 
-    const fullAddress = buildFullAddress({
-      street: payload.street,
-      number: payload.number,
-      complement: payload.complement,
-      neighborhood: payload.neighborhood,
-      city: payload.city,
-      state: payload.state,
-    })
+    const address = supporterAddress(payload)
 
     const supporter = await prisma.$transaction(async (transaction) => {
       const created = await transaction.supporter.create({
         data: {
           fullName: normalizeText(payload.fullName),
-          cpf: payload.cpf.replace(/\D/g, ''),
+          cpf: cpf ?? makeTechnicalIdentifier('AUTOCPF'),
           phone: payload.phone?.trim() || null,
-          phoneNormalized: normalizeOptionalDigits(payload.phone),
+          phoneNormalized,
           birthDate: new Date(payload.birthDate),
-          fullAddress,
-          postalCode: payload.postalCode.trim(),
-          street: payload.street.trim(),
-          number: payload.number.trim(),
-          complement: payload.complement?.trim() || null,
-          neighborhood: payload.neighborhood.trim(),
-          city: payload.city.trim(),
-          state: payload.state.trim().toUpperCase(),
-          voterRegistration: payload.voterRegistration.replace(/\D/g, ''),
-          electoralZone: payload.electoralZone.trim(),
-          electoralSection: payload.electoralSection.trim(),
+          fullAddress: address.fullAddress,
+          postalCode: address.postalCode,
+          street: address.street,
+          number: address.number,
+          complement: address.complement,
+          neighborhood: address.neighborhood,
+          city: address.city,
+          state: address.state,
+          voterRegistration: voterRegistration ?? makeTechnicalIdentifier('AUTOTIT'),
+          electoralZone: payload.electoralZone?.trim() || 'Nao informado',
+          electoralSection: payload.electoralSection?.trim() || 'Nao informada',
           leaderId,
           notes: payload.notes?.trim() || null,
           consentAccepted: payload.consentAccepted,
@@ -281,10 +315,18 @@ supportersRouter.put(
 
     const leaderId = currentUser.role.name === 'LEADER' ? existing.leaderId : existing.leaderId
 
+    const cpf = normalizeManualDigits(payload.cpf, 'AUTOCPF')
+    const voterRegistration = normalizeManualDigits(payload.voterRegistration, 'AUTOTIT')
+    const phoneNormalized = normalizeOptionalDigits(payload.phone)
+
+    if (!phoneNormalized) {
+      throw new HttpError(400, 'Informe o telefone do apoiador.')
+    }
+
     const conflict = await findSupporterConflict({
-      cpf: payload.cpf.replace(/\D/g, ''),
-      phoneNormalized: normalizeOptionalDigits(payload.phone),
-      voterRegistration: payload.voterRegistration.replace(/\D/g, ''),
+      cpf,
+      phoneNormalized,
+      voterRegistration,
       excludeSupporterId: existing.id,
     })
 
@@ -293,33 +335,28 @@ supportersRouter.put(
       throw new HttpError(409, message.message, message.details)
     }
 
+    const address = supporterAddress(payload)
+
     const updated = await prisma.$transaction(async (transaction) => {
       const supporter = await transaction.supporter.update({
         where: { id: existing.id },
         data: {
           fullName: normalizeText(payload.fullName),
-          cpf: payload.cpf.replace(/\D/g, ''),
+          cpf: cpf ?? existing.cpf,
           phone: payload.phone?.trim() || null,
-          phoneNormalized: normalizeOptionalDigits(payload.phone),
+          phoneNormalized,
           birthDate: new Date(payload.birthDate),
-          fullAddress: buildFullAddress({
-            street: payload.street,
-            number: payload.number,
-            complement: payload.complement,
-            neighborhood: payload.neighborhood,
-            city: payload.city,
-            state: payload.state,
-          }),
-          postalCode: payload.postalCode.trim(),
-          street: payload.street.trim(),
-          number: payload.number.trim(),
-          complement: payload.complement?.trim() || null,
-          neighborhood: payload.neighborhood.trim(),
-          city: payload.city.trim(),
-          state: payload.state.trim().toUpperCase(),
-          voterRegistration: payload.voterRegistration.replace(/\D/g, ''),
-          electoralZone: payload.electoralZone.trim(),
-          electoralSection: payload.electoralSection.trim(),
+          fullAddress: address.fullAddress,
+          postalCode: address.postalCode,
+          street: address.street,
+          number: address.number,
+          complement: address.complement,
+          neighborhood: address.neighborhood,
+          city: address.city,
+          state: address.state,
+          voterRegistration: voterRegistration ?? existing.voterRegistration,
+          electoralZone: payload.electoralZone?.trim() || existing.electoralZone,
+          electoralSection: payload.electoralSection?.trim() || existing.electoralSection,
           notes: payload.notes?.trim() || null,
           consentAccepted: payload.consentAccepted,
           consentSource: payload.consentSource,

@@ -44,6 +44,7 @@ export function buildSupporterWhere(user: AuthenticatedUser, filters: SupporterF
       ? {
           OR: [
             { fullName: { contains: search } },
+            { fullAddress: { contains: search } },
             ...(digitsSearch ? [{ cpf: { contains: digitsSearch } }] : []),
             ...(digitsSearch ? [{ voterRegistration: { contains: digitsSearch } }] : []),
             ...(digitsSearch ? [{ phoneNormalized: { contains: digitsSearch } }] : []),

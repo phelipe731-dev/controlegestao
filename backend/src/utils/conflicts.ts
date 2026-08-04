@@ -45,20 +45,26 @@ export async function ensureUniqueUserFields(input: UserConflictInput) {
 }
 
 type SupporterConflictInput = {
-  cpf: string
+  cpf?: string | null
   phoneNormalized?: string | null
-  voterRegistration: string
+  voterRegistration?: string | null
   excludeSupporterId?: string
 }
 
 export async function findSupporterConflict(input: SupporterConflictInput) {
+  const checks = [
+    ...(input.cpf ? [{ cpf: input.cpf }] : []),
+    ...(input.voterRegistration ? [{ voterRegistration: input.voterRegistration }] : []),
+    ...(input.phoneNormalized ? [{ phoneNormalized: input.phoneNormalized }] : []),
+  ]
+
+  if (checks.length === 0) {
+    return null
+  }
+
   const conflicts = await prisma.supporter.findMany({
     where: {
-      OR: [
-        { cpf: input.cpf },
-        { voterRegistration: input.voterRegistration },
-        ...(input.phoneNormalized ? [{ phoneNormalized: input.phoneNormalized }] : []),
-      ],
+      OR: checks,
       NOT: input.excludeSupporterId ? { id: input.excludeSupporterId } : undefined,
     },
     include: {

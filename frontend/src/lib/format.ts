@@ -72,6 +72,18 @@ export function cpfMask(value?: string | null) {
     return '-'
   }
 
-  const digits = value.replace(/\D/g, '').padStart(11, '0').slice(0, 11)
+  if (value.startsWith('AUTOCPF-')) {
+    return 'Não informado'
+  }
+
+  if (value.startsWith('ANON-')) {
+    return 'Anonimizado'
+  }
+
+  const digits = value.replace(/\D/g, '')
+  if (digits.length !== 11) {
+    return value
+  }
+
   return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
 }

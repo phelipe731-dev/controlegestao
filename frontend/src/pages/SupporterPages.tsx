@@ -8,11 +8,12 @@ import { StatusPill } from '../components/StatusPill'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { getErrorMessage } from '../lib/errors'
-import { cpfMask, formatDateTime, statusLabel, toInputDate } from '../lib/format'
+import { formatDate, formatDateTime, statusLabel, toInputDate } from '../lib/format'
 import type { ConsentSource, Leader, Supporter, SupporterStatus } from '../types/api'
 
 type SupporterFormValues = {
   fullName: string
+  fullAddress: string
   cpf: string
   phone: string
   birthDate: string
@@ -44,6 +45,7 @@ type SupporterFilters = {
 
 const initialForm: SupporterFormValues = {
   fullName: '',
+  fullAddress: '',
   cpf: '',
   phone: '',
   birthDate: '',
@@ -151,7 +153,7 @@ export function SupporterListPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             className="field-base pl-9"
-            placeholder="Buscar por nome, CPF ou título..."
+            placeholder="Buscar por nome, telefone ou endereço..."
             value={filters.search}
             onChange={(e) => updateFilters((c) => ({ ...c, search: e.target.value }))}
           />
@@ -276,12 +278,12 @@ export function SupporterListPage() {
                     <td>
                       <div className="font-medium text-ink">{supporter.fullName}</div>
                       <div className="mt-0.5 text-xs text-slate-400">
-                        {cpfMask(supporter.cpf)} · {supporter.phone || 'Sem telefone'}
+                        {supporter.phone || 'Sem telefone'} · Nasc. {formatDate(supporter.birthDate)}
                       </div>
                     </td>
                     <td>
-                      <div className="text-sm text-ink">{supporter.city}</div>
-                      <div className="mt-0.5 text-xs text-slate-400">{supporter.neighborhood}</div>
+                      <div className="max-w-xs truncate text-sm text-ink">{supporter.fullAddress}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">{supporter.city} · {supporter.neighborhood}</div>
                     </td>
                     <td>
                       <div className="text-sm">Zona {supporter.electoralZone}</div>
@@ -420,6 +422,7 @@ export function SupporterFormPage() {
     }
     form.reset({
       fullName: supporterData.fullName,
+      fullAddress: supporterData.fullAddress,
       cpf: supporterData.cpf,
       phone: supporterData.phone ?? '',
       birthDate: toInputDate(supporterData.birthDate),
@@ -486,74 +489,28 @@ export function SupporterFormPage() {
       </div>
 
       <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-5">
-        {/* Dados pessoais */}
         <div className="app-card p-5">
           <div className="mb-4 border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-semibold text-ink">Dados pessoais</h3>
+            <h3 className="text-sm font-semibold text-ink">Cadastro simplificado</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Preencha somente os dados essenciais do apoiador e vincule a uma liderança responsável.
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nome completo">
               <TextInput {...form.register('fullName', { required: true })} placeholder="Nome completo" />
             </Field>
-            <Field label="CPF">
-              <TextInput {...form.register('cpf', { required: true })} placeholder="000.000.000-00" />
-            </Field>
             <Field label="Telefone">
-              <TextInput {...form.register('phone')} placeholder="(11) 90000-0000" />
+              <TextInput {...form.register('phone', { required: true })} placeholder="(11) 90000-0000" />
             </Field>
             <Field label="Data de nascimento">
               <TextInput type="date" {...form.register('birthDate', { required: true })} />
             </Field>
-          </div>
-        </div>
-
-        {/* Endereço */}
-        <div className="app-card p-5">
-          <div className="mb-4 border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-semibold text-ink">Endereço</h3>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="CEP">
-              <TextInput {...form.register('postalCode', { required: true })} placeholder="00000-000" />
-            </Field>
             <div className="sm:col-span-2">
-              <Field label="Rua">
-                <TextInput {...form.register('street', { required: true })} />
+              <Field label="Endereço completo">
+                <TextAreaInput {...form.register('fullAddress', { required: true })} placeholder="Rua, número, bairro, cidade e complemento se houver" />
               </Field>
             </div>
-            <Field label="Número">
-              <TextInput {...form.register('number', { required: true })} />
-            </Field>
-            <Field label="Complemento">
-              <TextInput {...form.register('complement')} placeholder="Apto, bloco..." />
-            </Field>
-            <Field label="Bairro">
-              <TextInput {...form.register('neighborhood', { required: true })} />
-            </Field>
-            <Field label="Cidade">
-              <TextInput {...form.register('city', { required: true })} />
-            </Field>
-            <Field label="Estado">
-              <TextInput {...form.register('state', { required: true })} maxLength={2} placeholder="SP" />
-            </Field>
-          </div>
-        </div>
-
-        {/* Dados eleitorais */}
-        <div className="app-card p-5">
-          <div className="mb-4 border-b border-slate-100 pb-3">
-            <h3 className="text-sm font-semibold text-ink">Dados eleitorais</h3>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Título de eleitor">
-              <TextInput {...form.register('voterRegistration', { required: true })} />
-            </Field>
-            <Field label="Zona eleitoral">
-              <TextInput {...form.register('electoralZone', { required: true })} />
-            </Field>
-            <Field label="Seção eleitoral">
-              <TextInput {...form.register('electoralSection', { required: true })} />
-            </Field>
             <Field label="Líder responsável">
               {user?.role === 'ADMIN' ? (
                 <SelectInput {...form.register('leaderId', { required: true })}>
@@ -566,17 +523,14 @@ export function SupporterFormPage() {
                 <TextInput value="Vinculado ao líder autenticado" disabled />
               )}
             </Field>
-            <Field label="Status">
-              <SelectInput {...form.register('status')}>
-                <option value="ACTIVE">Ativo</option>
-                <option value="ARCHIVED">Arquivado</option>
-                <option value="ANONYMIZED">Anonimizado</option>
-              </SelectInput>
-            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Observações">
+                <TextAreaInput {...form.register('notes')} placeholder="Anotações internas sobre o apoiador" />
+              </Field>
+            </div>
           </div>
         </div>
 
-        {/* Consentimento & Notas */}
         <div className="app-card p-5">
           <div className="mb-4 border-b border-slate-100 pb-3">
             <h3 className="text-sm font-semibold text-ink">Consentimento LGPD</h3>
@@ -592,11 +546,6 @@ export function SupporterFormPage() {
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <CheckboxInput {...form.register('consentAccepted')} />
               <span className="text-sm text-slate-700">Consentimento LGPD aceito pelo titular</span>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Observações">
-                <TextAreaInput {...form.register('notes')} placeholder="Informações adicionais sobre o apoiador..." />
-              </Field>
             </div>
           </div>
         </div>

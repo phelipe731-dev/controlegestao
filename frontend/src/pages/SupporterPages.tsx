@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Plus, Search, SlidersHorizontal, UserCheck, ArrowLeftRight, ShieldOff, Trash2, Pencil } from 'lucide-react'
 import { CheckboxInput, Field, SelectInput, TextAreaInput, TextInput } from '../components/FormControls'
@@ -463,8 +463,23 @@ export function SupporterFormPage() {
     onError: (error) => alert(getErrorMessage(error)),
   })
 
-  const handleInvalidSubmit = () => {
-    alert('Preencha os campos obrigatórios: nome completo, telefone, data de nascimento, endereço completo, líder responsável e consentimento LGPD.')
+  const handleInvalidSubmit = (errors: FieldErrors<SupporterFormValues>) => {
+    const labels: Partial<Record<keyof SupporterFormValues, string>> = {
+      fullName: 'nome completo',
+      phone: 'telefone',
+      birthDate: 'data de nascimento',
+      fullAddress: 'endereço completo',
+      leaderId: 'líder responsável',
+      consentAccepted: 'consentimento LGPD',
+    }
+    const missingFields = Object.entries(labels)
+      .filter(([field]) => Boolean(errors[field as keyof SupporterFormValues]))
+      .map(([, label]) => label)
+
+    alert(missingFields.length > 0
+      ? `Falta preencher: ${missingFields.join(', ')}.`
+      : 'Revise os campos obrigatórios antes de cadastrar.'
+    )
   }
 
   if (user?.role === 'SUPERVISOR') {
@@ -548,7 +563,7 @@ export function SupporterFormPage() {
               </SelectInput>
             </Field>
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-              <CheckboxInput {...form.register('consentAccepted')} />
+              <CheckboxInput {...form.register('consentAccepted', { required: true })} />
               <span className="text-sm text-slate-700">Consentimento LGPD aceito pelo titular</span>
             </div>
           </div>

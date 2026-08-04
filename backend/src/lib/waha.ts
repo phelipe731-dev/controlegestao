@@ -162,7 +162,7 @@ export async function getWahaConnectionStatus(): Promise<WahaConnectionStatus> {
   const status = (extractString(data, ['status']) ?? '').toUpperCase()
 
   if (status === 'WORKING') return 'working'
-  if (status === 'SCAN_QR') return 'scan_qr'
+  if (status === 'SCAN_QR' || status === 'SCAN_QR_CODE') return 'scan_qr'
   if (status === 'STARTING') return 'starting'
   if (status === 'STOPPED') return 'stopped'
   return 'unknown'

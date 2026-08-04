@@ -182,6 +182,10 @@ export function DobradaPauloAlexandrePage() {
     editForm.reset(initialFormValues)
   }
 
+  const handleInvalidSubmit = () => {
+    alert('Preencha pelo menos o nome da liderança.')
+  }
+
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-teal/20 bg-gradient-to-br from-ink to-sidebar p-5 text-white shadow-card-md sm:p-6">
@@ -200,7 +204,7 @@ export function DobradaPauloAlexandrePage() {
         </div>
       </div>
 
-      <form className="app-card p-5 sm:p-6" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
+      <form noValidate className="app-card p-5 sm:p-6" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values), handleInvalidSubmit)}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <div className="section-label">Novo cadastro</div>
@@ -448,7 +452,8 @@ export function DobradaPauloAlexandrePage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
           <form
             className="app-card max-h-[88vh] w-full max-w-4xl overflow-hidden"
-            onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}
+            noValidate
+            onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values), handleInvalidSubmit)}
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
               <div>

@@ -369,6 +369,10 @@ export function LeaderFormPage() {
     },
   })
 
+  const handleInvalidSubmit = () => {
+    alert('Preencha os campos obrigatórios: nome completo, cidade e bairro.')
+  }
+
   if (!canManage) {
     return <div className="app-card p-6 text-slate-600">Seu perfil não possui permissão para cadastrar ou editar líderes.</div>
   }
@@ -390,7 +394,7 @@ export function LeaderFormPage() {
         </Link>
       </div>
 
-      <form className="space-y-5" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+      <form noValidate className="space-y-5" onSubmit={form.handleSubmit((values) => mutation.mutate(values), handleInvalidSubmit)}>
         {/* Dados de acesso */}
         <div className="app-card p-5">
           <div className="mb-4 border-b border-slate-100 pb-3">

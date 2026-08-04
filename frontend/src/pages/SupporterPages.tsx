@@ -463,6 +463,10 @@ export function SupporterFormPage() {
     onError: (error) => alert(getErrorMessage(error)),
   })
 
+  const handleInvalidSubmit = () => {
+    alert('Preencha os campos obrigatórios: nome completo, telefone, data de nascimento, endereço completo, líder responsável e consentimento LGPD.')
+  }
+
   if (user?.role === 'SUPERVISOR') {
     return (
       <div className="app-card p-8 text-center text-slate-500">
@@ -488,7 +492,7 @@ export function SupporterFormPage() {
         </Link>
       </div>
 
-      <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-5">
+      <form noValidate onSubmit={form.handleSubmit((v) => mutation.mutate(v), handleInvalidSubmit)} className="space-y-5">
         <div className="app-card p-5">
           <div className="mb-4 border-b border-slate-100 pb-3">
             <h3 className="text-sm font-semibold text-ink">Cadastro simplificado</h3>

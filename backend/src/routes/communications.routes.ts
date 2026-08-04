@@ -7,8 +7,74 @@ import { asyncHandler } from '../utils/async-handler.js'
 import { writeAuditLog } from '../utils/audit.js'
 import { HttpError } from '../utils/http-error.js'
 import { supporterScope } from '../utils/scopes.js'
+import {
+  connectEvolutionInstance,
+  getEvolutionConnectionStatus,
+  isEvolutionConfigured,
+  logoutEvolutionInstance,
+  sendEvolutionTextMessage,
+} from '../lib/evolution.js'
+import { env } from '../config/env.js'
 
 export const communicationsRouter = Router()
+
+communicationsRouter.post(
+  '/webhook/evolution',
+  asyncHandler(async (request, response) => {
+    if (env.EVOLUTION_WEBHOOK_SECRET && request.headers['x-campanhahub-webhook-secret'] !== env.EVOLUTION_WEBHOOK_SECRET) {
+      throw new HttpError(401, 'Webhook nao autorizado.')
+    }
+
+    const body = request.body as Record<string, unknown>
+    const event = String(body.event ?? body.type ?? '').toUpperCase()
+    const instanceName = String(body.instance ?? body.instanceName ?? '')
+
+    if (instanceName && instanceName !== env.EVOLUTION_INSTANCE_NAME) {
+      response.json({ ok: true })
+      return
+    }
+
+    const channel = await findWhatsAppQrChannel()
+    if (!channel) {
+      response.json({ ok: true })
+      return
+    }
+
+    if (event.includes('CONNECTION')) {
+      const state = String((body.data as Record<string, unknown> | undefined)?.state ?? body.state ?? '').toLowerCase()
+      const status = ['open', 'connected', 'ready'].includes(state)
+        ? 'READY'
+        : ['close', 'closed', 'disconnected', 'logout'].includes(state)
+          ? 'DRAFT'
+          : 'CONNECTING'
+
+      await prisma.communicationChannelConfig.update({
+        where: { id: channel.id },
+        data: {
+          status,
+          lastSyncAt: new Date(),
+          qrToken: status === 'READY' ? null : channel.qrToken,
+        },
+      })
+    }
+
+    if (event.includes('QRCODE')) {
+      const data = body.data as Record<string, unknown> | undefined
+      const qrToken = typeof data?.base64 === 'string' ? data.base64 : typeof data?.code === 'string' ? data.code : channel.qrToken
+
+      await prisma.communicationChannelConfig.update({
+        where: { id: channel.id },
+        data: {
+          status: 'CONNECTING',
+          qrToken,
+          lastSyncAt: new Date(),
+        },
+      })
+    }
+
+    response.json({ ok: true })
+  }),
+)
 
 communicationsRouter.use(authenticate)
 
@@ -115,11 +181,96 @@ async function findWhatsAppQrChannel(channelId?: string | null) {
   })
 }
 
+async function syncWhatsAppQrChannel() {
+  const channel = await findWhatsAppQrChannel()
+  if (!channel || !isEvolutionConfigured()) return channel
+
+  try {
+    const state = await getEvolutionConnectionStatus()
+    const status = state === 'open' ? 'READY' : state === 'close' ? 'DRAFT' : state === 'connecting' ? 'CONNECTING' : channel.status
+
+    if (status !== channel.status) {
+      return prisma.communicationChannelConfig.update({
+        where: { id: channel.id },
+        data: {
+          status,
+          lastSyncAt: new Date(),
+          qrToken: status === 'READY' ? null : channel.qrToken,
+        },
+      })
+    }
+  } catch {
+    return prisma.communicationChannelConfig.update({
+      where: { id: channel.id },
+      data: {
+        status: 'ERROR',
+        lastSyncAt: new Date(),
+      },
+    })
+  }
+
+  return channel
+}
+
+async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: string) {
+  if (!isEvolutionConfigured()) return
+
+  const recipients = await prisma.campaignRecipient.findMany({
+    where: {
+      campaignId,
+      status: 'QUEUED',
+      supporter: {
+        phone: {
+          not: null,
+        },
+      },
+    },
+    include: {
+      supporter: true,
+    },
+  })
+
+  let sentCount = 0
+
+  for (const recipient of recipients) {
+    try {
+      const result = await sendEvolutionTextMessage(recipient.supporter.phone ?? '', message)
+      await prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: 'SENT',
+          externalId: typeof result.key === 'string' ? result.key : null,
+          sentAt: new Date(),
+        },
+      })
+      sentCount += 1
+    } catch (error) {
+      await prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: 'FAILED',
+          externalId: error instanceof Error ? error.message.slice(0, 180) : 'Falha no envio',
+        },
+      })
+    }
+  }
+
+  await prisma.communicationCampaign.update({
+    where: { id: campaignId },
+    data: {
+      status: sentCount > 0 ? 'SENT' : 'FAILED',
+      sentAt: sentCount > 0 ? new Date() : null,
+    },
+  })
+}
+
 communicationsRouter.get(
   '/overview',
   authorize('ADMIN', 'SUPERVISOR', 'LEADER'),
   asyncHandler(async (request, response) => {
     const currentUser = request.user!
+    await syncWhatsAppQrChannel()
+
     const [channels, campaigns, inbox, supporterCount] = await Promise.all([
       prisma.communicationChannelConfig.findMany({
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
@@ -154,6 +305,10 @@ communicationsRouter.get(
         queuedCampaigns: campaigns.filter((campaign) => campaign.status === 'QUEUED').length,
         unreadInbox: inbox.filter((item) => !item.readAt).length,
         baseReach: supporterCount,
+      },
+      integration: {
+        evolutionConfigured: isEvolutionConfigured(),
+        instanceName: env.EVOLUTION_INSTANCE_NAME,
       },
       channels: channels.map((channel) => ({
         id: channel.id,
@@ -264,6 +419,24 @@ communicationsRouter.post(
     const existing = await findWhatsAppQrChannel()
 
     if (existing) {
+      if (isEvolutionConfigured()) {
+        const qr = await connectEvolutionInstance()
+        const updated = await prisma.communicationChannelConfig.update({
+          where: { id: existing.id },
+          data: {
+            providerName: 'Evolution API',
+            apiBaseUrl: env.EVOLUTION_API_URL,
+            senderId: env.EVOLUTION_INSTANCE_NAME,
+            status: 'CONNECTING',
+            qrToken: qr.base64 ?? qr.code ?? qr.pairingCode,
+            lastSyncAt: new Date(),
+          },
+        })
+
+        response.json({ channel: updated, qrValue: qr.code, qrCodeBase64: qr.base64, evolutionConfigured: true })
+        return
+      }
+
       response.json({ channel: existing })
       return
     }
@@ -275,6 +448,9 @@ communicationsRouter.post(
         type: 'WHATSAPP',
         mode: 'QR',
         status: 'DRAFT',
+        providerName: isEvolutionConfigured() ? 'Evolution API' : null,
+        apiBaseUrl: env.EVOLUTION_API_URL ?? null,
+        senderId: env.EVOLUTION_INSTANCE_NAME,
         phoneNumber: '(11) 99999-1000',
         isDefault: true,
       },
@@ -296,7 +472,22 @@ communicationsRouter.post(
       },
     })
 
-    response.status(201).json({ channel })
+    if (isEvolutionConfigured()) {
+      const qr = await connectEvolutionInstance()
+      const updated = await prisma.communicationChannelConfig.update({
+        where: { id: channel.id },
+        data: {
+          status: 'CONNECTING',
+          qrToken: qr.base64 ?? qr.code ?? qr.pairingCode,
+          lastSyncAt: new Date(),
+        },
+      })
+
+      response.status(201).json({ channel: updated, qrValue: qr.code, qrCodeBase64: qr.base64, evolutionConfigured: true })
+      return
+    }
+
+    response.status(201).json({ channel, evolutionConfigured: false })
   }),
 )
 
@@ -317,6 +508,30 @@ communicationsRouter.post(
       throw new HttpError(400, 'Este canal nao utiliza conexao por QR Code.')
     }
 
+    if (isEvolutionConfigured()) {
+      const qr = await connectEvolutionInstance()
+      const updated = await prisma.communicationChannelConfig.update({
+        where: { id: channelId },
+        data: {
+          providerName: 'Evolution API',
+          apiBaseUrl: env.EVOLUTION_API_URL,
+          senderId: env.EVOLUTION_INSTANCE_NAME,
+          qrToken: qr.base64 ?? qr.code ?? qr.pairingCode,
+          status: 'CONNECTING',
+          lastSyncAt: new Date(),
+        },
+      })
+
+      response.json({
+        channel: updated,
+        qrValue: qr.code,
+        qrCodeBase64: qr.base64,
+        pairingCode: qr.pairingCode,
+        evolutionConfigured: true,
+      })
+      return
+    }
+
     const qrToken = `PAIR-${Math.random().toString(36).slice(2, 8).toUpperCase()}-${Date.now().toString().slice(-4)}`
     const updated = await prisma.communicationChannelConfig.update({
       where: { id: channelId },
@@ -330,6 +545,8 @@ communicationsRouter.post(
     response.json({
       channel: updated,
       qrValue: `whatsapp://pair?token=${qrToken}`,
+      qrCodeBase64: null,
+      evolutionConfigured: false,
     })
   }),
 )
@@ -349,6 +566,10 @@ communicationsRouter.post(
 
     if (!channel) {
       throw new HttpError(404, 'Canal de WhatsApp QR nao encontrado.')
+    }
+
+    if (isEvolutionConfigured()) {
+      await logoutEvolutionInstance()
     }
 
     const updated = await prisma.communicationChannelConfig.update({
@@ -448,13 +669,25 @@ communicationsRouter.post(
       },
     })
 
+    if (campaign.status === 'QUEUED') {
+      await dispatchImmediateWhatsAppCampaign(campaign.id, campaign.body)
+    }
+
+    const updatedCampaign = await prisma.communicationCampaign.findUnique({
+      where: { id: campaign.id },
+      include: {
+        recipients: true,
+        channelConfig: true,
+      },
+    })
+
     response.status(201).json({
       campaign: {
-        id: campaign.id,
-        title: campaign.title,
-        status: campaign.status,
-        recipientsCount: campaign.recipients.length,
-        channelName: campaign.channelConfig.name,
+        id: updatedCampaign?.id ?? campaign.id,
+        title: updatedCampaign?.title ?? campaign.title,
+        status: updatedCampaign?.status ?? campaign.status,
+        recipientsCount: updatedCampaign?.recipients.length ?? campaign.recipients.length,
+        channelName: updatedCampaign?.channelConfig.name ?? campaign.channelConfig.name,
       },
     })
   }),

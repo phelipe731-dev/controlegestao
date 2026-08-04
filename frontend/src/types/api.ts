@@ -238,6 +238,10 @@ export type CommunicationsOverview = {
     unreadInbox: number
     baseReach: number
   }
+  integration?: {
+    evolutionConfigured: boolean
+    instanceName: string
+  }
   channels: CommunicationChannel[]
   campaigns: CommunicationCampaign[]
   inbox: CommunicationInboxItem[]

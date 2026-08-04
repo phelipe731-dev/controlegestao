@@ -126,6 +126,14 @@ function CampaignStatusBadge({ status }: { status: CampaignStatus }) {
 }
 
 function WhatsAppQrPreview({ token }: { token?: string | null }) {
+  if (token?.startsWith('data:image')) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <img src={token} alt="QR Code do WhatsApp Business" className="aspect-square w-full rounded-lg object-contain" />
+      </div>
+    )
+  }
+
   const seed = token || 'WHATSAPP-BUSINESS-QR'
 
   return (
@@ -147,12 +155,14 @@ function WhatsAppQrPreview({ token }: { token?: string | null }) {
 function WhatsAppQrModal({
   open,
   channel,
+  evolutionConfigured,
   refreshing,
   onRefresh,
   onClose,
 }: {
   open: boolean
   channel?: CommunicationChannel
+  evolutionConfigured: boolean
   refreshing: boolean
   onRefresh: () => void
   onClose: () => void
@@ -207,9 +217,15 @@ function WhatsAppQrModal({
                 {item}
               </div>
             ))}
-            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
-              A leitura real depende da integração do provedor WhatsApp. O sistema mantém o QR e o status preparados para sincronização.
-            </div>
+            {evolutionConfigured ? (
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+                QR Code gerado pela Evolution API. A tela atualiza o status automaticamente enquanto o modal estiver aberto.
+              </div>
+            ) : (
+              <div className="rounded-xl border border-amber/20 bg-amber/10 p-3 text-xs text-amber">
+                Configure EVOLUTION_API_URL e EVOLUTION_API_KEY no backend para gerar um QR Code escaneável.
+              </div>
+            )}
           </div>
         </div>
 
@@ -229,12 +245,14 @@ function WhatsAppQrModal({
 
 function WhatsAppConnectionCard({
   channel,
+  evolutionConfigured,
   refreshing,
   disconnecting,
   onConnect,
   onDisconnect,
 }: {
   channel?: CommunicationChannel
+  evolutionConfigured: boolean
   refreshing: boolean
   disconnecting: boolean
   onConnect: () => void
@@ -266,6 +284,7 @@ function WhatsAppConnectionCard({
               Última sincronização: {formatDateTime(channel?.lastSyncAt)}
             </span>
             <span>Sessão: {channel?.name ?? 'WhatsApp Business QR'}</span>
+            <span>Integração: {evolutionConfigured ? 'Evolution API configurada' : 'Aguardando configuração'}</span>
           </div>
         </div>
 
@@ -420,6 +439,7 @@ function NewCampaignForm({
   leaders,
   estimate,
   connected,
+  evolutionConfigured,
   submitting,
   onChange,
   onSubmit,
@@ -429,6 +449,7 @@ function NewCampaignForm({
   leaders: Leader[]
   estimate?: number
   connected: boolean
+  evolutionConfigured: boolean
   submitting: boolean
   onChange: (form: CampaignFormState) => void
   onSubmit: (action: Exclude<PendingCampaignAction, null>) => void
@@ -452,7 +473,11 @@ function NewCampaignForm({
         ) : null}
       </div>
 
-      {!connected ? (
+      {!evolutionConfigured ? (
+        <div className="mt-5 rounded-xl border border-amber/20 bg-amber/10 p-4 text-sm text-amber">
+          A Evolution API ainda nao foi configurada no servidor. Voce pode preparar rascunhos, mas o envio real sera liberado depois da configuracao.
+        </div>
+      ) : !connected ? (
         <div className="mt-5 rounded-xl border border-amber/20 bg-amber/10 p-4 text-sm text-amber">
           Conecte um número do WhatsApp antes de criar uma campanha.
         </div>
@@ -528,7 +553,7 @@ function NewCampaignForm({
         <button type="button" className="button-secondary" disabled={submitting} onClick={() => onSubmit('draft')}>
           Salvar rascunho
         </button>
-        <button type="button" className="button-primary" disabled={submitting || !connected} onClick={() => onSubmit('send')}>
+        <button type="button" className="button-primary" disabled={submitting || !connected || !evolutionConfigured} onClick={() => onSubmit('send')}>
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           {form.scheduleMode === 'SCHEDULE' ? 'Agendar campanha' : 'Enviar campanha'}
         </button>
@@ -629,6 +654,7 @@ export function CommunicationsPage() {
   )
   const connectionStatus = whatsappChannel?.status ?? 'DISCONNECTED'
   const connectionStyle = connectionStyles[connectionStatus]
+  const evolutionConfigured = overview?.integration?.evolutionConfigured ?? false
   const connected = ['CONNECTED', 'READY'].includes(connectionStatus)
   const queuedCampaigns = overview?.campaigns.filter((campaign) => ['QUEUED', 'SCHEDULED', 'DRAFT'].includes(campaign.status)).length ?? 0
 
@@ -726,6 +752,7 @@ export function CommunicationsPage() {
     if (campaignForm.title.trim().length < 3) return 'Informe o nome da campanha.'
     if (campaignForm.body.trim().length < 10) return 'Digite a mensagem da campanha.'
     if (campaignForm.body.length > messageLimit) return 'A mensagem ultrapassou o limite de caracteres.'
+    if (action !== 'draft' && !evolutionConfigured) return 'Configure a Evolution API antes de enviar campanhas reais.'
     if (action !== 'draft' && !connected) return 'Conecte um número do WhatsApp antes de criar uma campanha.'
     if (campaignForm.audienceMode === 'SEGMENT' && campaignForm.segmentType === 'CITY' && !campaignForm.city.trim()) return 'Informe a cidade do segmento.'
     if (campaignForm.audienceMode === 'SEGMENT' && campaignForm.segmentType === 'LEADER' && !campaignForm.leaderId) return 'Selecione o líder do segmento.'
@@ -779,6 +806,7 @@ export function CommunicationsPage() {
 
       <WhatsAppConnectionCard
         channel={whatsappChannel}
+        evolutionConfigured={evolutionConfigured}
         refreshing={refreshQrMutation.isPending || ensureQrChannelMutation.isPending}
         disconnecting={disconnectMutation.isPending}
         onConnect={openQrFlow}
@@ -797,6 +825,7 @@ export function CommunicationsPage() {
         leaders={leadersQuery.data ?? []}
         estimate={estimateQuery.data}
         connected={connected}
+        evolutionConfigured={evolutionConfigured}
         submitting={createCampaignMutation.isPending}
         onChange={setCampaignForm}
         onSubmit={requestCampaignSubmit}
@@ -806,6 +835,7 @@ export function CommunicationsPage() {
       <WhatsAppQrModal
         open={qrModalOpen}
         channel={whatsappChannel}
+        evolutionConfigured={evolutionConfigured}
         refreshing={refreshQrMutation.isPending || ensureQrChannelMutation.isPending}
         onRefresh={openQrFlow}
         onClose={() => setQrModalOpen(false)}

@@ -11,6 +11,11 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('12h'),
   DATABASE_URL: z.string().min(1),
   UPLOAD_DIR: z.string().min(1).default('/app/uploads'),
+  EVOLUTION_API_URL: z.string().url().optional(),
+  EVOLUTION_API_KEY: z.string().min(8).optional(),
+  EVOLUTION_INSTANCE_NAME: z.string().min(1).default('campanhahub'),
+  EVOLUTION_WEBHOOK_URL: z.string().url().optional(),
+  EVOLUTION_WEBHOOK_SECRET: z.string().min(12).optional(),
 })
 
 export const env = envSchema.parse(process.env)

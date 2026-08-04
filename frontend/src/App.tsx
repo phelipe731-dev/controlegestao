@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext'
 import { AccountPage } from './pages/AccountPage'
 import { CommunicationsPage } from './pages/CommunicationsPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { DemandsPage } from './pages/DemandsPage'
 import { DobradaPauloAlexandrePage } from './pages/DobradaPauloAlexandrePage'
 import { EventsPage } from './pages/EventsPage'
 import { ForgotPasswordPage, LoginPage } from './pages/AuthPages'
@@ -29,6 +30,7 @@ export function App() {
           <Route path="/supporters" element={<SupporterListPage />} />
           <Route path="/supporters/new" element={<SupporterFormPage />} />
           <Route path="/supporters/:id/edit" element={<SupporterFormPage />} />
+          <Route path="/demands" element={<DemandsPage />} />
           <Route path="/communications" element={<CommunicationsPage />} />
           <Route path="/dobrada-paulo-alexandre" element={<DobradaPauloAlexandrePage />} />
           <Route path="/events" element={<EventsPage />} />

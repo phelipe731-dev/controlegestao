@@ -1,6 +1,7 @@
 import {
   BarChart3,
   CalendarRange,
+  ClipboardList,
   MessageSquareShare,
   FileText,
   Handshake,
@@ -42,6 +43,7 @@ export function AppShell() {
       items: [
         { to: '/', label: 'Painel', icon: BarChart3, visible: true },
         { to: '/supporters', label: 'Apoiadores', icon: Vote, visible: true },
+        { to: '/demands', label: 'Demandas', icon: ClipboardList, visible: true },
         { to: '/dobrada-paulo-alexandre', label: 'Dobrada Paulo Alexandre', icon: Handshake, visible: user?.role !== 'LEADER' },
         { to: '/communications', label: 'Comunicação', icon: MessageSquareShare, visible: true },
         { to: '/events', label: 'Eventos', icon: CalendarRange, visible: true },
@@ -68,6 +70,7 @@ export function AppShell() {
   const pageTitles: Record<string, { title: string; subtitle: string }> = {
     '/': { title: 'Painel', subtitle: 'Visão geral da operação' },
     '/supporters': { title: 'Apoiadores', subtitle: 'Cadastro e acompanhamento da base' },
+    '/demands': { title: 'Demandas', subtitle: 'Solicitações recebidas pelo gabinete' },
     '/dobrada-paulo-alexandre': { title: 'Dobrada Paulo Alexandre', subtitle: 'Lideranças vinculadas à dobrada' },
     '/communications': { title: 'Comunicação', subtitle: 'Central de mensagens e notificações' },
     '/events': { title: 'Eventos', subtitle: 'Agenda e mobilização' },

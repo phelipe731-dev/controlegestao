@@ -9,6 +9,7 @@ export type CampaignStatus = 'DRAFT' | 'QUEUED' | 'SCHEDULED' | 'SENT' | 'FAILED
 export type CampaignAudienceType = 'ALL_SUPPORTERS' | 'CITY' | 'ELECTORAL_ZONE' | 'LEADER'
 export type EventStatus = 'DRAFT' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
 export type EventFormat = 'PRESENTIAL' | 'ONLINE' | 'HYBRID'
+export type DemandStatus = 'REQUESTED' | 'IN_PROGRESS' | 'RESOLVED'
 
 export type CurrentUser = {
   id: string
@@ -271,6 +272,54 @@ export type EventsOverview = {
     baseReach: number
   }
   events: CampaignEvent[]
+}
+
+export type CabinetDemandHistoryItem = {
+  id: string
+  previousStatus: DemandStatus | null
+  nextStatus: DemandStatus
+  note: string | null
+  updatedByUserName: string
+  createdAt: string
+}
+
+export type CabinetDemand = {
+  id: string
+  title: string
+  description: string
+  status: DemandStatus
+  requesterName: string
+  requesterPhone: string
+  requesterAddress: string
+  requesterCity: string | null
+  requesterNeighborhood: string | null
+  responsibleUserId: string | null
+  responsibleUserName: string | null
+  createdByUserId: string
+  createdByUserName: string
+  resolvedAt: string | null
+  createdAt: string
+  updatedAt: string
+  history: CabinetDemandHistoryItem[]
+}
+
+export type DemandsResponse = {
+  demands: CabinetDemand[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+  metrics: {
+    requested: number
+    inProgress: number
+    resolved: number
+  }
+}
+
+export type DemandResponsibleUser = {
+  id: string
+  name: string
+  role: Role
 }
 
 export type TerritoryZone = {

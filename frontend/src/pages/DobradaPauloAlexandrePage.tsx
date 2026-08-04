@@ -53,6 +53,35 @@ function nullable(value?: string | null) {
   return value ?? ''
 }
 
+function toPayload(values: DobradaLeaderFormValues) {
+  return {
+    ...values,
+    cpf: values.cpf || null,
+    phone: values.phone || null,
+    email: values.email || null,
+    fullAddress: values.fullAddress || null,
+    city: values.city || null,
+    neighborhood: values.neighborhood || null,
+    source: values.source || null,
+    notes: values.notes || null,
+  }
+}
+
+function toFormValues(leader: DobradaPauloAlexandreLeader): DobradaLeaderFormValues {
+  return {
+    fullName: leader.fullName,
+    cpf: nullable(leader.cpf),
+    phone: nullable(leader.phone),
+    email: nullable(leader.email),
+    fullAddress: nullable(leader.fullAddress),
+    city: nullable(leader.city),
+    neighborhood: nullable(leader.neighborhood),
+    source: nullable(leader.source),
+    notes: nullable(leader.notes),
+    status: leader.status,
+  }
+}
+
 export function DobradaPauloAlexandrePage() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
@@ -61,7 +90,11 @@ export function DobradaPauloAlexandrePage() {
   const [filters, setFilters] = useState<DobradaLeaderFilters>(initialFilters)
   const pageSize = 25
 
-  const form = useForm<DobradaLeaderFormValues>({
+  const createForm = useForm<DobradaLeaderFormValues>({
+    defaultValues: initialFormValues,
+  })
+
+  const editForm = useForm<DobradaLeaderFormValues>({
     defaultValues: initialFormValues,
   })
 
@@ -82,39 +115,39 @@ export function DobradaPauloAlexandrePage() {
     },
   })
 
-  const saveMutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: async (values: DobradaLeaderFormValues) => {
-      const payload = {
-        ...values,
-        cpf: values.cpf || null,
-        phone: values.phone || null,
-        email: values.email || null,
-        fullAddress: values.fullAddress || null,
-        city: values.city || null,
-        neighborhood: values.neighborhood || null,
-        source: values.source || null,
-        notes: values.notes || null,
-      }
-
-      if (editingLeader) {
-        const response = await api.put<{ leader: DobradaPauloAlexandreLeader }>(
-          `/dobrada-paulo-alexandre/leaders/${editingLeader.id}`,
-          payload,
-        )
-        return response.data.leader
-      }
-
       const response = await api.post<{ leader: DobradaPauloAlexandreLeader }>(
         '/dobrada-paulo-alexandre/leaders',
-        payload,
+        toPayload(values),
       )
       return response.data.leader
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['dobrada-paulo-alexandre-leaders'] })
-      form.reset(initialFormValues)
+      createForm.reset(initialFormValues)
+      alert('Liderança cadastrada na dobrada.')
+    },
+    onError: (error) => alert(getErrorMessage(error)),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: async (values: DobradaLeaderFormValues) => {
+      if (!editingLeader) {
+        throw new Error('Nenhuma liderança selecionada para edição.')
+      }
+
+      const response = await api.put<{ leader: DobradaPauloAlexandreLeader }>(
+        `/dobrada-paulo-alexandre/leaders/${editingLeader.id}`,
+        toPayload(values),
+      )
+      return response.data.leader
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['dobrada-paulo-alexandre-leaders'] })
+      editForm.reset(initialFormValues)
       setEditingLeader(null)
-      alert(editingLeader ? 'Liderança atualizada com sucesso.' : 'Liderança cadastrada na dobrada.')
+      alert('Liderança atualizada com sucesso.')
     },
     onError: (error) => alert(getErrorMessage(error)),
   })
@@ -133,7 +166,6 @@ export function DobradaPauloAlexandrePage() {
   const totalLeaders = data?.total ?? 0
   const totalPages = data?.totalPages ?? 1
   const activeFilters = Object.values(filters).filter(Boolean).length
-  const isEditing = Boolean(editingLeader)
 
   const updateFilters = (updater: (current: DobradaLeaderFilters) => DobradaLeaderFilters) => {
     setPage(1)
@@ -142,24 +174,12 @@ export function DobradaPauloAlexandrePage() {
 
   const startEdit = (leader: DobradaPauloAlexandreLeader) => {
     setEditingLeader(leader)
-    form.reset({
-      fullName: leader.fullName,
-      cpf: nullable(leader.cpf),
-      phone: nullable(leader.phone),
-      email: nullable(leader.email),
-      fullAddress: nullable(leader.fullAddress),
-      city: nullable(leader.city),
-      neighborhood: nullable(leader.neighborhood),
-      source: nullable(leader.source),
-      notes: nullable(leader.notes),
-      status: leader.status,
-    })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    editForm.reset(toFormValues(leader))
   }
 
   const cancelEdit = () => {
     setEditingLeader(null)
-    form.reset(initialFormValues)
+    editForm.reset(initialFormValues)
   }
 
   return (
@@ -180,69 +200,56 @@ export function DobradaPauloAlexandrePage() {
         </div>
       </div>
 
-      <form className="app-card p-5 sm:p-6" onSubmit={form.handleSubmit((values) => saveMutation.mutate(values))}>
+      <form className="app-card p-5 sm:p-6" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
-            <div className="section-label">{isEditing ? 'Editar liderança' : 'Novo cadastro'}</div>
-            <h3 className="mt-1 font-display text-lg font-bold text-ink">
-              {isEditing ? editingLeader?.fullName : 'Adicionar liderança da dobrada'}
-            </h3>
+            <div className="section-label">Novo cadastro</div>
+            <h3 className="mt-1 font-display text-lg font-bold text-ink">Adicionar liderança da dobrada</h3>
           </div>
-          {isEditing && (
-            <button type="button" className="button-secondary" onClick={cancelEdit}>
-              <X className="h-4 w-4" />
-              Cancelar edição
-            </button>
-          )}
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Nome da liderança">
-            <TextInput {...form.register('fullName', { required: true })} placeholder="Nome completo ou apelido operacional" />
+            <TextInput {...createForm.register('fullName', { required: true })} placeholder="Nome completo ou apelido operacional" />
           </Field>
           <Field label="Telefone">
-            <TextInput {...form.register('phone')} placeholder="WhatsApp ou telefone" />
+            <TextInput {...createForm.register('phone')} placeholder="WhatsApp ou telefone" />
           </Field>
           <Field label="CPF (opcional e pode repetir)">
-            <TextInput {...form.register('cpf')} />
+            <TextInput {...createForm.register('cpf')} />
           </Field>
           <Field label="E-mail">
-            <TextInput type="email" {...form.register('email')} />
+            <TextInput type="email" {...createForm.register('email')} />
           </Field>
           <Field label="Cidade">
-            <TextInput {...form.register('city')} />
+            <TextInput {...createForm.register('city')} />
           </Field>
           <Field label="Bairro/região">
-            <TextInput {...form.register('neighborhood')} />
+            <TextInput {...createForm.register('neighborhood')} />
           </Field>
           <Field label="Endereço">
-            <TextInput {...form.register('fullAddress')} />
+            <TextInput {...createForm.register('fullAddress')} />
           </Field>
           <Field label="Origem">
-            <TextInput {...form.register('source')} placeholder="Ex: reunião, indicação, bairro" />
+            <TextInput {...createForm.register('source')} placeholder="Ex: reunião, indicação, bairro" />
           </Field>
           <Field label="Status">
-            <SelectInput {...form.register('status')}>
+            <SelectInput {...createForm.register('status')}>
               <option value="ACTIVE">Ativo</option>
               <option value="INACTIVE">Inativo</option>
             </SelectInput>
           </Field>
           <div className="md:col-span-2 xl:col-span-3">
             <Field label="Observações">
-              <TextAreaInput {...form.register('notes')} placeholder="Anotações internas sobre a liderança da dobrada" />
+              <TextAreaInput {...createForm.register('notes')} placeholder="Anotações internas sobre a liderança da dobrada" />
             </Field>
           </div>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          <button type="submit" className="button-primary" disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Cadastrar na dobrada'}
+          <button type="submit" className="button-primary" disabled={createMutation.isPending}>
+            {createMutation.isPending ? 'Salvando...' : 'Cadastrar na dobrada'}
           </button>
-          {isEditing && (
-            <button type="button" className="button-secondary" onClick={cancelEdit}>
-              Limpar formulário
-            </button>
-          )}
         </div>
       </form>
 
@@ -436,6 +443,82 @@ export function DobradaPauloAlexandrePage() {
           </>
         )}
       </div>
+
+      {editingLeader && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
+          <form
+            className="app-card max-h-[88vh] w-full max-w-4xl overflow-hidden"
+            onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+              <div>
+                <div className="section-label">Editar liderança da dobrada</div>
+                <h3 className="mt-1 font-display text-lg font-bold text-ink">{editingLeader.fullName}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Atualize os dados do cadastro selecionado sem sair da lista.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-ink"
+                onClick={cancelEdit}
+                aria-label="Fechar edição"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[62vh] overflow-y-auto p-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Field label="Nome da liderança">
+                  <TextInput {...editForm.register('fullName', { required: true })} />
+                </Field>
+                <Field label="Telefone">
+                  <TextInput {...editForm.register('phone')} placeholder="WhatsApp ou telefone" />
+                </Field>
+                <Field label="CPF (opcional e pode repetir)">
+                  <TextInput {...editForm.register('cpf')} />
+                </Field>
+                <Field label="E-mail">
+                  <TextInput type="email" {...editForm.register('email')} />
+                </Field>
+                <Field label="Cidade">
+                  <TextInput {...editForm.register('city')} />
+                </Field>
+                <Field label="Bairro/região">
+                  <TextInput {...editForm.register('neighborhood')} />
+                </Field>
+                <Field label="Endereço">
+                  <TextInput {...editForm.register('fullAddress')} />
+                </Field>
+                <Field label="Origem">
+                  <TextInput {...editForm.register('source')} />
+                </Field>
+                <Field label="Status">
+                  <SelectInput {...editForm.register('status')}>
+                    <option value="ACTIVE">Ativo</option>
+                    <option value="INACTIVE">Inativo</option>
+                  </SelectInput>
+                </Field>
+                <div className="md:col-span-2 xl:col-span-3">
+                  <Field label="Observações">
+                    <TextAreaInput {...editForm.register('notes')} placeholder="Anotações internas sobre a liderança da dobrada" />
+                  </Field>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 p-5">
+              <button type="button" className="button-secondary" onClick={cancelEdit}>
+                Cancelar
+              </button>
+              <button type="submit" className="button-primary" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

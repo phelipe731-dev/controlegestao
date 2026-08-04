@@ -210,6 +210,32 @@ async function syncWhatsAppQrChannel() {
   return channel
 }
 
+function renderCampaignMessage(
+  template: string,
+  values: {
+    name: string
+    phone: string
+    city: string
+    neighborhood: string
+  },
+) {
+  const variables: Record<string, string> = {
+    nome: values.name,
+    telefone: values.phone,
+    cidade: values.city,
+    bairro: values.neighborhood,
+  }
+
+  return template.replace(/\{\{\s*([a-zA-ZÀ-ÿ_]+)\s*\}\}/g, (_match, variableName: string) => {
+    const normalizedKey = variableName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+
+    return variables[normalizedKey] ?? ''
+  })
+}
+
 async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: string) {
   if (!isWahaConfigured()) return
 
@@ -220,7 +246,14 @@ async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: st
       OR: [{ phone: { not: null } }, { supporter: { phone: { not: null } } }],
     },
     include: {
-      supporter: true,
+      supporter: {
+        select: {
+          fullName: true,
+          phone: true,
+          city: true,
+          neighborhood: true,
+        },
+      },
     },
   })
 
@@ -228,7 +261,13 @@ async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: st
 
   for (const recipient of recipients) {
     try {
-      const result = await sendWahaTextMessage(recipient.phone ?? recipient.supporter?.phone ?? '', message)
+      const personalizedMessage = renderCampaignMessage(message, {
+        name: recipient.supporter?.fullName ?? recipient.displayName ?? 'apoiador',
+        phone: recipient.supporter?.phone ?? recipient.phone ?? '',
+        city: recipient.supporter?.city ?? '',
+        neighborhood: recipient.supporter?.neighborhood ?? '',
+      })
+      const result = await sendWahaTextMessage(recipient.phone ?? recipient.supporter?.phone ?? '', personalizedMessage)
       await prisma.campaignRecipient.update({
         where: { id: recipient.id },
         data: {
@@ -382,7 +421,12 @@ communicationsRouter.post(
       throw new HttpError(400, 'Conecte um numero do WhatsApp antes de enviar teste.')
     }
 
-    const result = await sendWahaTextMessage(payload.phone, payload.body)
+    const result = await sendWahaTextMessage(payload.phone, renderCampaignMessage(payload.body, {
+      name: payload.name?.trim() || 'Contato de teste',
+      phone: payload.phone,
+      city: '',
+      neighborhood: '',
+    }))
 
     await writeAuditLog({
       actorUserId: request.user!.id,

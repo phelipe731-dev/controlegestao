@@ -300,80 +300,109 @@ export function DobradaPauloAlexandrePage() {
         <button
           type="button"
           className="button-primary"
-          onClick={() => setShowCreateForm((current) => !current)}
+          onClick={() => setShowCreateForm(true)}
         >
-          {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showCreateForm ? 'Fechar cadastro' : 'Nova liderança'}
+          <Plus className="h-4 w-4" />
+          Nova liderança
         </button>
       </div>
 
       {showCreateForm && (
-      <form noValidate className="app-card p-5 sm:p-6" onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values), handleInvalidSubmit)}>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div>
-            <div className="section-label">Novo cadastro</div>
-            <h3 className="mt-1 font-display text-lg font-bold text-ink">Adicionar liderança da dobrada</h3>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Nome da liderança">
-            <TextInput {...createForm.register('fullName', { required: true })} placeholder="Nome completo ou apelido operacional" />
-          </Field>
-          <Field label="Telefone">
-            <TextInput {...createForm.register('phone')} placeholder="WhatsApp ou telefone" />
-          </Field>
-          <Field label="CPF (opcional e pode repetir)">
-            <TextInput {...createForm.register('cpf')} />
-          </Field>
-          <Field label="E-mail">
-            <TextInput type="email" {...createForm.register('email')} />
-          </Field>
-          <Field label="Cidade">
-            <TextInput {...createForm.register('city')} />
-          </Field>
-          <Field label="Bairro/região">
-            <TextInput {...createForm.register('neighborhood')} />
-          </Field>
-          <Field label="Endereço">
-            <TextInput {...createForm.register('fullAddress')} />
-          </Field>
-          <Field label="Origem">
-            <TextInput {...createForm.register('source')} placeholder="Ex: reunião, indicação, bairro" />
-          </Field>
-          <Field label="Custo mensal da operação">
-            <TextInput {...createForm.register('monthlyCost')} placeholder="Ex: 500,00" />
-          </Field>
-          <Field label="Status">
-            <SelectInput {...createForm.register('status')}>
-              <option value="ACTIVE">Ativo</option>
-              <option value="INACTIVE">Inativo</option>
-            </SelectInput>
-          </Field>
-          <div className="md:col-span-2 xl:col-span-3">
-            <Field label="Observações">
-              <TextAreaInput {...createForm.register('notes')} placeholder="Anotações internas sobre a liderança da dobrada" />
-            </Field>
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button type="submit" className="button-primary" disabled={createMutation.isPending}>
-            {createMutation.isPending ? 'Salvando...' : 'Cadastrar na dobrada'}
-          </button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/55 px-4 pb-4 pt-16 backdrop-blur-sm sm:items-center sm:p-6">
           <button
             type="button"
-            className="button-secondary"
-            disabled={createMutation.isPending}
+            className="absolute inset-0"
+            aria-label="Fechar cadastro de liderança"
             onClick={() => {
               createForm.reset(initialFormValues)
               setShowCreateForm(false)
             }}
+          />
+          <form
+            noValidate
+            className="app-card relative z-10 max-h-[88vh] w-full max-w-5xl overflow-hidden"
+            onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values), handleInvalidSubmit)}
           >
-            Cancelar
-          </button>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 p-5">
+              <div>
+                <div className="section-label">Novo cadastro</div>
+                <h3 className="mt-1 font-display text-lg font-bold text-ink">Adicionar liderança da dobrada</h3>
+                <p className="mt-1 text-sm text-slate-500">Registre uma liderança específica da dobrada sem criar login no sistema.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-ink"
+                aria-label="Fechar cadastro"
+                onClick={() => {
+                  createForm.reset(initialFormValues)
+                  setShowCreateForm(false)
+                }}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[62vh] overflow-y-auto p-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Field label="Nome da liderança">
+                  <TextInput {...createForm.register('fullName', { required: true })} placeholder="Nome completo ou apelido operacional" />
+                </Field>
+                <Field label="Telefone">
+                  <TextInput {...createForm.register('phone')} placeholder="WhatsApp ou telefone" />
+                </Field>
+                <Field label="CPF (opcional e pode repetir)">
+                  <TextInput {...createForm.register('cpf')} />
+                </Field>
+                <Field label="E-mail">
+                  <TextInput type="email" {...createForm.register('email')} />
+                </Field>
+                <Field label="Cidade">
+                  <TextInput {...createForm.register('city')} />
+                </Field>
+                <Field label="Bairro/região">
+                  <TextInput {...createForm.register('neighborhood')} />
+                </Field>
+                <Field label="Endereço">
+                  <TextInput {...createForm.register('fullAddress')} />
+                </Field>
+                <Field label="Origem">
+                  <TextInput {...createForm.register('source')} placeholder="Ex: reunião, indicação, bairro" />
+                </Field>
+                <Field label="Custo mensal da operação">
+                  <TextInput {...createForm.register('monthlyCost')} placeholder="Ex: 500,00" />
+                </Field>
+                <Field label="Status">
+                  <SelectInput {...createForm.register('status')}>
+                    <option value="ACTIVE">Ativo</option>
+                    <option value="INACTIVE">Inativo</option>
+                  </SelectInput>
+                </Field>
+                <div className="md:col-span-2 xl:col-span-3">
+                  <Field label="Observações">
+                    <TextAreaInput {...createForm.register('notes')} placeholder="Anotações internas sobre a liderança da dobrada" />
+                  </Field>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 p-5">
+              <button
+                type="button"
+                className="button-secondary"
+                disabled={createMutation.isPending}
+                onClick={() => {
+                  createForm.reset(initialFormValues)
+                  setShowCreateForm(false)
+                }}
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="button-primary" disabled={createMutation.isPending}>
+                {createMutation.isPending ? 'Salvando...' : 'Cadastrar na dobrada'}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
       )}
 
       <div className="flex flex-wrap items-center gap-3">

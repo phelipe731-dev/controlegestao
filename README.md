@@ -14,7 +14,7 @@ Plataforma web SaaS para gestao interna de campanha politica com foco em apoiado
 - Exportacao em CSV e Excel
 - Auditoria de criacao, edicao, exclusao, transferencia, login e anonimização
 - Registro de consentimento LGPD com origem e horario
-- Comunicacao por WhatsApp preparada para Evolution API com conexao por QR Code e disparo rastreavel
+- Comunicacao por WhatsApp preparada para WAHA com conexao por QR Code e disparo rastreavel
 
 ## Stack
 
@@ -55,7 +55,7 @@ cp .env.example .env
 - `JWT_SECRET`
 - `FRONTEND_URL`
 - `VITE_API_URL`
-- `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` e `EVOLUTION_INSTANCE_NAME` se for usar WhatsApp via Evolution API
+- `WAHA_API_URL`, `WAHA_API_KEY` e `WAHA_SESSION` se for usar WhatsApp via WAHA
 
 3. Suba tudo:
 
@@ -144,27 +144,29 @@ Se as imagens estiverem privadas no GitHub Container Registry, faca login na VPS
 echo SEU_TOKEN_GITHUB | docker login ghcr.io -u SEU_USUARIO_GITHUB --password-stdin
 ```
 
-## WhatsApp com Evolution API
+## WhatsApp com WAHA
 
-A integracao fica toda no backend. O frontend nunca recebe a chave da Evolution, apenas o QR Code/status da conexao.
+A integracao fica toda no backend. O frontend nunca recebe a chave do WAHA, apenas o QR Code/status da conexao.
 
 Variaveis principais:
 
 ```bash
-EVOLUTION_API_URL=http://evolution:8080
-EVOLUTION_API_KEY=uma-chave-forte-da-evolution
-EVOLUTION_INSTANCE_NAME=campanhahub
-EVOLUTION_WEBHOOK_URL=https://gestaocontrole.duckdns.org/api/communications/webhook/evolution
-EVOLUTION_WEBHOOK_SECRET=um-segredo-forte-para-webhook
+WAHA_API_URL=http://waha:3000
+WAHA_API_KEY=uma-chave-forte-do-waha
+WAHA_SESSION=default
+WAHA_WEBHOOK_URL=https://gestaocontrole.duckdns.org/api/communications/webhook/waha
+WAHA_WEBHOOK_SECRET=um-segredo-forte-para-webhook
+WAHA_DASHBOARD_USERNAME=admin
+WAHA_DASHBOARD_PASSWORD=uma-senha-forte-do-dashboard
 ```
 
 Fluxo usado pelo sistema:
 
-- `POST /instance/create` cria a instancia WhatsApp Baileys quando necessario.
-- `GET /instance/connect/{instanceName}` busca o QR Code para leitura no WhatsApp.
-- `GET /instance/connectionState/{instanceName}` sincroniza o status da conexao.
-- `POST /message/sendText/{instanceName}` envia mensagens das campanhas imediatas.
-- `POST /api/communications/webhook/evolution` recebe eventos de QR Code e conexao.
+- `POST /api/sessions/{session}/start` inicia a sessao do WhatsApp.
+- `GET /api/{session}/auth/qr?format=image` busca o QR Code para leitura no WhatsApp.
+- `GET /api/sessions/{session}` sincroniza o status da conexao.
+- `POST /api/sendText` envia mensagens das campanhas imediatas.
+- `POST /api/communications/webhook/waha` recebe eventos de status da sessao.
 
 ## Como rodar sem Docker
 

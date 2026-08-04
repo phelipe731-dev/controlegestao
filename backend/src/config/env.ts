@@ -19,6 +19,11 @@ const envSchema = z.object({
   EVOLUTION_INSTANCE_NAME: z.string().min(1).default('campanhahub'),
   EVOLUTION_WEBHOOK_URL: optionalUrl,
   EVOLUTION_WEBHOOK_SECRET: optionalString.refine((value) => !value || value.length >= 12, 'EVOLUTION_WEBHOOK_SECRET precisa ter ao menos 12 caracteres'),
+  WAHA_API_URL: optionalUrl,
+  WAHA_API_KEY: optionalString.refine((value) => !value || value.length >= 8, 'WAHA_API_KEY precisa ter ao menos 8 caracteres'),
+  WAHA_SESSION: z.string().min(1).default('default'),
+  WAHA_WEBHOOK_URL: optionalUrl,
+  WAHA_WEBHOOK_SECRET: optionalString.refine((value) => !value || value.length >= 12, 'WAHA_WEBHOOK_SECRET precisa ter ao menos 12 caracteres'),
 })
 
 export const env = envSchema.parse(process.env)

@@ -8,28 +8,29 @@ import { writeAuditLog } from '../utils/audit.js'
 import { HttpError } from '../utils/http-error.js'
 import { supporterScope } from '../utils/scopes.js'
 import {
-  connectEvolutionInstance,
-  getEvolutionConnectionStatus,
-  isEvolutionConfigured,
-  logoutEvolutionInstance,
-  sendEvolutionTextMessage,
-} from '../lib/evolution.js'
+  connectWahaSession,
+  getWahaConnectionStatus,
+  getWahaSessionName,
+  isWahaConfigured,
+  logoutWahaSession,
+  sendWahaTextMessage,
+} from '../lib/waha.js'
 import { env } from '../config/env.js'
 
 export const communicationsRouter = Router()
 
 communicationsRouter.post(
-  '/webhook/evolution',
+  '/webhook/waha',
   asyncHandler(async (request, response) => {
-    if (env.EVOLUTION_WEBHOOK_SECRET && request.headers['x-campanhahub-webhook-secret'] !== env.EVOLUTION_WEBHOOK_SECRET) {
+    if (env.WAHA_WEBHOOK_SECRET && request.headers['x-campanhahub-webhook-secret'] !== env.WAHA_WEBHOOK_SECRET) {
       throw new HttpError(401, 'Webhook nao autorizado.')
     }
 
     const body = request.body as Record<string, unknown>
     const event = String(body.event ?? body.type ?? '').toUpperCase()
-    const instanceName = String(body.instance ?? body.instanceName ?? '')
+    const session = String(body.session ?? body.sessionName ?? '')
 
-    if (instanceName && instanceName !== env.EVOLUTION_INSTANCE_NAME) {
+    if (session && session !== env.WAHA_SESSION) {
       response.json({ ok: true })
       return
     }
@@ -40,11 +41,11 @@ communicationsRouter.post(
       return
     }
 
-    if (event.includes('CONNECTION')) {
-      const state = String((body.data as Record<string, unknown> | undefined)?.state ?? body.state ?? '').toLowerCase()
-      const status = ['open', 'connected', 'ready'].includes(state)
+    if (event.includes('SESSION.STATUS')) {
+      const state = String((body.payload as Record<string, unknown> | undefined)?.status ?? body.status ?? '').toUpperCase()
+      const status = state === 'WORKING'
         ? 'READY'
-        : ['close', 'closed', 'disconnected', 'logout'].includes(state)
+        : state === 'STOPPED'
           ? 'DRAFT'
           : 'CONNECTING'
 
@@ -54,20 +55,6 @@ communicationsRouter.post(
           status,
           lastSyncAt: new Date(),
           qrToken: status === 'READY' ? null : channel.qrToken,
-        },
-      })
-    }
-
-    if (event.includes('QRCODE')) {
-      const data = body.data as Record<string, unknown> | undefined
-      const qrToken = typeof data?.base64 === 'string' ? data.base64 : typeof data?.code === 'string' ? data.code : channel.qrToken
-
-      await prisma.communicationChannelConfig.update({
-        where: { id: channel.id },
-        data: {
-          status: 'CONNECTING',
-          qrToken,
-          lastSyncAt: new Date(),
         },
       })
     }
@@ -183,11 +170,11 @@ async function findWhatsAppQrChannel(channelId?: string | null) {
 
 async function syncWhatsAppQrChannel() {
   const channel = await findWhatsAppQrChannel()
-  if (!channel || !isEvolutionConfigured()) return channel
+  if (!channel || !isWahaConfigured()) return channel
 
   try {
-    const state = await getEvolutionConnectionStatus()
-    const status = state === 'open' ? 'READY' : state === 'close' ? 'DRAFT' : state === 'connecting' ? 'CONNECTING' : channel.status
+    const state = await getWahaConnectionStatus()
+    const status = state === 'working' ? 'READY' : state === 'stopped' ? 'DRAFT' : ['scan_qr', 'starting'].includes(state) ? 'CONNECTING' : channel.status
 
     if (status !== channel.status) {
       return prisma.communicationChannelConfig.update({
@@ -213,7 +200,7 @@ async function syncWhatsAppQrChannel() {
 }
 
 async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: string) {
-  if (!isEvolutionConfigured()) return
+  if (!isWahaConfigured()) return
 
   const recipients = await prisma.campaignRecipient.findMany({
     where: {
@@ -234,7 +221,7 @@ async function dispatchImmediateWhatsAppCampaign(campaignId: string, message: st
 
   for (const recipient of recipients) {
     try {
-      const result = await sendEvolutionTextMessage(recipient.supporter.phone ?? '', message)
+      const result = await sendWahaTextMessage(recipient.supporter.phone ?? '', message)
       await prisma.campaignRecipient.update({
         where: { id: recipient.id },
         data: {
@@ -307,8 +294,8 @@ communicationsRouter.get(
         baseReach: supporterCount,
       },
       integration: {
-        evolutionConfigured: isEvolutionConfigured(),
-        instanceName: env.EVOLUTION_INSTANCE_NAME,
+        evolutionConfigured: isWahaConfigured(),
+        instanceName: getWahaSessionName(),
       },
       channels: channels.map((channel) => ({
         id: channel.id,
@@ -419,16 +406,16 @@ communicationsRouter.post(
     const existing = await findWhatsAppQrChannel()
 
     if (existing) {
-      if (isEvolutionConfigured()) {
-        const qr = await connectEvolutionInstance()
+      if (isWahaConfigured()) {
+        const qr = await connectWahaSession()
         const updated = await prisma.communicationChannelConfig.update({
           where: { id: existing.id },
           data: {
-            providerName: 'Evolution API',
-            apiBaseUrl: env.EVOLUTION_API_URL,
-            senderId: env.EVOLUTION_INSTANCE_NAME,
+            providerName: 'WAHA',
+            apiBaseUrl: env.WAHA_API_URL,
+            senderId: getWahaSessionName(),
             status: 'CONNECTING',
-            qrToken: qr.base64 ?? qr.code ?? qr.pairingCode,
+            qrToken: qr.base64 ?? qr.code,
             lastSyncAt: new Date(),
           },
         })
@@ -448,9 +435,9 @@ communicationsRouter.post(
         type: 'WHATSAPP',
         mode: 'QR',
         status: 'DRAFT',
-        providerName: isEvolutionConfigured() ? 'Evolution API' : null,
-        apiBaseUrl: env.EVOLUTION_API_URL ?? null,
-        senderId: env.EVOLUTION_INSTANCE_NAME,
+        providerName: isWahaConfigured() ? 'WAHA' : null,
+        apiBaseUrl: env.WAHA_API_URL ?? null,
+        senderId: getWahaSessionName(),
         phoneNumber: '(11) 99999-1000',
         isDefault: true,
       },
@@ -472,13 +459,13 @@ communicationsRouter.post(
       },
     })
 
-    if (isEvolutionConfigured()) {
-      const qr = await connectEvolutionInstance()
+    if (isWahaConfigured()) {
+      const qr = await connectWahaSession()
       const updated = await prisma.communicationChannelConfig.update({
         where: { id: channel.id },
         data: {
           status: 'CONNECTING',
-          qrToken: qr.base64 ?? qr.code ?? qr.pairingCode,
+          qrToken: qr.base64 ?? qr.code,
           lastSyncAt: new Date(),
         },
       })
@@ -508,15 +495,15 @@ communicationsRouter.post(
       throw new HttpError(400, 'Este canal nao utiliza conexao por QR Code.')
     }
 
-    if (isEvolutionConfigured()) {
-      const qr = await connectEvolutionInstance()
+    if (isWahaConfigured()) {
+      const qr = await connectWahaSession()
       const updated = await prisma.communicationChannelConfig.update({
         where: { id: channelId },
         data: {
-          providerName: 'Evolution API',
-          apiBaseUrl: env.EVOLUTION_API_URL,
-          senderId: env.EVOLUTION_INSTANCE_NAME,
-          qrToken: qr.base64 ?? qr.code ?? qr.pairingCode,
+          providerName: 'WAHA',
+          apiBaseUrl: env.WAHA_API_URL,
+          senderId: getWahaSessionName(),
+          qrToken: qr.base64 ?? qr.code,
           status: 'CONNECTING',
           lastSyncAt: new Date(),
         },
@@ -526,7 +513,7 @@ communicationsRouter.post(
         channel: updated,
         qrValue: qr.code,
         qrCodeBase64: qr.base64,
-        pairingCode: qr.pairingCode,
+        pairingCode: null,
         evolutionConfigured: true,
       })
       return
@@ -568,8 +555,8 @@ communicationsRouter.post(
       throw new HttpError(404, 'Canal de WhatsApp QR nao encontrado.')
     }
 
-    if (isEvolutionConfigured()) {
-      await logoutEvolutionInstance()
+    if (isWahaConfigured()) {
+      await logoutWahaSession()
     }
 
     const updated = await prisma.communicationChannelConfig.update({

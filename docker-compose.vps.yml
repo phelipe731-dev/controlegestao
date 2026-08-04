@@ -16,6 +16,7 @@ services:
     restart: unless-stopped
     depends_on:
       - db
+      - waha
     environment:
       PORT: 3333
       NODE_ENV: production
@@ -32,6 +33,11 @@ services:
       EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-campanhahub}
       EVOLUTION_WEBHOOK_URL: ${EVOLUTION_WEBHOOK_URL:-}
       EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
+      WAHA_API_URL: ${WAHA_API_URL:-http://waha:3000}
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WAHA_SESSION: ${WAHA_SESSION:-default}
+      WAHA_WEBHOOK_URL: ${WAHA_WEBHOOK_URL:-}
+      WAHA_WEBHOOK_SECRET: ${WAHA_WEBHOOK_SECRET:-}
     ports:
       - 127.0.0.1:${API_PORT:-3333}:3333
     volumes:
@@ -46,6 +52,25 @@ services:
     ports:
       - 127.0.0.1:${FRONTEND_PORT:-5173}:80
 
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: campanha-waha
+    restart: unless-stopped
+    environment:
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
+      WHATSAPP_SWAGGER_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WHATSAPP_SWAGGER_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
+      WHATSAPP_RESTART_ALL_SESSIONS: "true"
+      WAHA_CLIENT_DEVICE_NAME: CampanhaHub
+      WAHA_CLIENT_BROWSER_NAME: Chrome
+    ports:
+      - 127.0.0.1:${WAHA_PORT:-3000}:3000
+    volumes:
+      - waha_sessions:/app/.sessions
+
 volumes:
   postgres_data:
   uploads_data:
+  waha_sessions:
